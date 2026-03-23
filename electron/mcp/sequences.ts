@@ -224,9 +224,6 @@ export function generateSlip39ShareSteps(shares: string[][]): AutoStep[] {
 // Mnemonic test data — loaded from external file (mnemonics.local.json)
 // ============================================================================
 
-import fs from 'fs';
-import path from 'path';
-
 interface MnemonicsData {
   bip39: Record<string, string>;
   slip39: Record<string, string>;
@@ -237,6 +234,18 @@ interface MnemonicsData {
  * Falls back to placeholder words and logs a warning if the file is missing.
  */
 function loadMnemonics(): MnemonicsData {
+  const isNodeRuntime =
+    typeof process !== 'undefined'
+    && !!process.versions?.node
+    && typeof window === 'undefined';
+
+  if (!isNodeRuntime) {
+    return { bip39: {}, slip39: {} };
+  }
+
+  const requireFn = eval('require') as NodeRequire;
+  const fs = requireFn('fs') as typeof import('fs');
+  const path = requireFn('path') as typeof import('path');
   const candidates = [
     path.join(process.cwd(), 'mnemonics.local.json'),
     path.join(__dirname, '..', '..', 'mnemonics.local.json'),
