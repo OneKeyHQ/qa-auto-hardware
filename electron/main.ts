@@ -332,9 +332,10 @@ async function runMnemonicOcrFromRenderer(
 
   return new Promise((resolve) => {
     const timeout = setTimeout(() => {
+      console.warn('Timed out waiting for mnemonic OCR response from renderer');
       pendingMnemonicOcrResolve = null;
       resolve(null);
-    }, 45000);
+    }, 50000);
 
     pendingMnemonicOcrResolve = (payload: MnemonicOcrResult | null) => {
       clearTimeout(timeout);
@@ -354,9 +355,10 @@ async function runVerifyOcrFromRenderer(): Promise<VerifyOcrResult | null> {
 
   return new Promise((resolve) => {
     const timeout = setTimeout(() => {
+      console.warn('Timed out waiting for verify OCR response from renderer');
       pendingVerifyOcrResolve = null;
       resolve(null);
-    }, 45000);
+    }, 50000);
 
     pendingVerifyOcrResolve = (payload: VerifyOcrResult | null) => {
       clearTimeout(timeout);

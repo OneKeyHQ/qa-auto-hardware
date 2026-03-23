@@ -61,6 +61,15 @@ const SLIP39_CREATE_SEQUENCE_CONFIG: Record<
   'create-slip39-multi-16of2-template': { shareCount: 16, threshold: 2 },
 };
 
+// The device firmware can still be finalizing wallet state right after
+// import/create flows complete. Hold the response briefly so the next test
+// does not start against a busy device.
+const POST_WALLET_FLOW_COOLDOWN_MS = 5000;
+
+function requiresPostSequenceCooldown(sequence: { category: string; actions: string[] }): boolean {
+  return sequence.category === '创建钱包' || sequence.actions.includes('nav-import');
+}
+
 /**
  * Executes a single step (click, swipe, or OCR capture).
  */
@@ -296,6 +305,14 @@ export async function executeExecuteSequence(
       }
     }
 
+    const needsCooldown = requiresPostSequenceCooldown(sequence);
+    if (needsCooldown) {
+      console.log(
+        `[execute-sequence] Cooling down for ${POST_WALLET_FLOW_COOLDOWN_MS}ms after ${sequence.id}`
+      );
+      await delay(POST_WALLET_FLOW_COOLDOWN_MS);
+    }
+
     // Capture frame if requested
     let frame: string | null = null;
     if (input.returnFrame !== false) {
@@ -305,7 +322,9 @@ export async function executeExecuteSequence(
     return {
       output: {
         success: true,
-        message: `Sequence "${sequence.name}" completed successfully`,
+        message: needsCooldown
+          ? `Sequence "${sequence.name}" completed successfully after ${POST_WALLET_FLOW_COOLDOWN_MS}ms cooldown`
+          : `Sequence "${sequence.name}" completed successfully`,
         sequenceId: sequence.id,
         sequenceName: sequence.name,
         stepsCompleted,
