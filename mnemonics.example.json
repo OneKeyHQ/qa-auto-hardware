@@ -1,0 +1,40 @@
+{
+  "bip39": {
+    "mnemonic_12_1": "word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12",
+    "mnemonic_12_2": "word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12",
+    "mnemonic_12_3": "word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12",
+    "mnemonic_12_api": "word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12",
+    "mnemonic_18_1": "word1 word2 ... word18",
+    "mnemonic_18_2": "word1 word2 ... word18",
+    "mnemonic_18_3": "word1 word2 ... word18",
+    "mnemonic_24_1": "word1 word2 ... word24",
+    "mnemonic_24_2": "word1 word2 ... word24",
+    "mnemonic_24_3": "word1 word2 ... word24"
+  },
+  "slip39": {
+    "slip39_20_1": "word1 word2 ... word20",
+    "slip39_20_2_share1": "word1 word2 ... word20",
+    "slip39_20_2_share2": "word1 word2 ... word20",
+    "slip39_20_2_share3": "word1 word2 ... word20",
+    "slip39_20_16_share1": "word1 word2 ... word20",
+    "slip39_20_16_share2": "word1 word2 ... word20",
+    "slip39_20_16_share3": "word1 word2 ... word20",
+    "slip39_20_16_share4": "word1 word2 ... word20",
+    "slip39_20_16_share5": "word1 word2 ... word20",
+    "slip39_20_16_share6": "word1 word2 ... word20",
+    "slip39_20_16_share7": "word1 word2 ... word20",
+    "slip39_20_16_share8": "word1 word2 ... word20",
+    "slip39_20_16_share9": "word1 word2 ... word20",
+    "slip39_20_16_share10": "word1 word2 ... word20",
+    "slip39_20_16_share11": "word1 word2 ... word20",
+    "slip39_20_16_share12": "word1 word2 ... word20",
+    "slip39_20_16_share13": "word1 word2 ... word20",
+    "slip39_20_16_share14": "word1 word2 ... word20",
+    "slip39_20_16_share15": "word1 word2 ... word20",
+    "slip39_20_16_share16": "word1 word2 ... word20",
+    "slip39_33_1": "word1 word2 ... word33",
+    "slip39_33_2_share1": "word1 word2 ... word33",
+    "slip39_33_2_share2": "word1 word2 ... word33",
+    "slip39_33_2_share3": "word1 word2 ... word33"
+  }
+}

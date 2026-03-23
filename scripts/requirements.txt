@@ -1,0 +1,12 @@
+# QA Auto Hardware OCR dependencies
+# Requires Python 3.9-3.12 (PaddlePaddle does not support Python 3.13+)
+#
+# Install via: scripts/setup_ocr.sh
+# Or manually: pip install -r scripts/requirements.txt
+
+paddlepaddle==3.0.0
+paddleocr>=2.9.0
+opencv-python>=4.9.0
+Pillow>=10.0.0
+PyYAML>=6.0
+numpy>=1.24.0,<2.0.0
