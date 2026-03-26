@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { createWorker, Worker, PSM } from 'tesseract.js';
+import type { Worker } from 'tesseract.js';
 import { validateMnemonic } from '@scure/bip39';
 import { wordlist as bip39English } from '@scure/bip39/wordlists/english.js';
 import { slip39English } from '../slip39Wordlist';
@@ -24,8 +24,16 @@ const ENABLE_CHECKSUM_GUIDED_AUTOCORRECT = false;
 const RAW_MNEMONIC_OCR_DEBUG_ONLY = false;
 const OCR_BACKEND: 'tesseract' | 'paddleocr_en' = 'paddleocr_en';
 const BASE_OCR_CHAR_WHITELIST = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.# ';
+const OCR_CAPTURE_SETTLE_DELAY_MS = 800;
+const OCR_CAPTURE_SETTLE_FRAMES = 3;
+const OCR_PSM = {
+  SINGLE_COLUMN: 4,
+  SINGLE_BLOCK: 6,
+  SINGLE_LINE: 7,
+  SPARSE_TEXT: 11,
+} as const;
 const BASE_OCR_PARAMS = {
-  tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
+  tessedit_pageseg_mode: OCR_PSM.SINGLE_BLOCK,
   tessedit_char_whitelist: BASE_OCR_CHAR_WHITELIST,
   preserve_interword_spaces: '1',
   user_defined_dpi: '300',
@@ -35,18 +43,19 @@ const BASE_OCR_PARAMS = {
 const MNEMONIC_OCR_PARAMS = {
   ...BASE_OCR_PARAMS,
   // Two-column mnemonic grid fits sparse text segmentation better than strict single-block.
-  tessedit_pageseg_mode: PSM.SPARSE_TEXT,
+  tessedit_pageseg_mode: OCR_PSM.SPARSE_TEXT,
 } as const;
 const MNEMONIC_COLUMN_OCR_PARAMS = {
   ...BASE_OCR_PARAMS,
-  tessedit_pageseg_mode: PSM.SINGLE_COLUMN,
+  tessedit_pageseg_mode: OCR_PSM.SINGLE_COLUMN,
 } as const;
 const NUMBER_OCR_PARAMS = {
   ...BASE_OCR_PARAMS,
-  tessedit_pageseg_mode: PSM.SINGLE_LINE,
+  tessedit_pageseg_mode: OCR_PSM.SINGLE_LINE,
   tessedit_char_whitelist: '0123456789# ',
 } as const;
 type OcrParams = Record<string, string | number>;
+type TesseractWorkerParams = Parameters<Worker['setParameters']>[0];
 type OcrWord = {
   text: string;
   confidence: number;
@@ -127,6 +136,34 @@ interface OcrTriggerOptions {
   mergeWithStored?: boolean;
   allowPartial?: boolean;
   requireBip39?: boolean;
+}
+
+type VideoWithFrameCallback = HTMLVideoElement & {
+  requestVideoFrameCallback?: (callback: () => void) => number;
+};
+
+function waitForNextVideoFrame(video: HTMLVideoElement): Promise<void> {
+  return new Promise((resolve) => {
+    const candidate = video as VideoWithFrameCallback;
+    if (typeof candidate.requestVideoFrameCallback === 'function') {
+      candidate.requestVideoFrameCallback(() => resolve());
+      return;
+    }
+    requestAnimationFrame(() => resolve());
+  });
+}
+
+async function waitForVideoToSettle(
+  video: HTMLVideoElement,
+  delayMs: number = OCR_CAPTURE_SETTLE_DELAY_MS,
+  frameCount: number = OCR_CAPTURE_SETTLE_FRAMES
+): Promise<void> {
+  if (delayMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+  for (let i = 0; i < frameCount; i++) {
+    await waitForNextVideoFrame(video);
+  }
 }
 
 function parseMnemonicIndexToken(token: string, expectedWordCount: number): number {
@@ -843,6 +880,7 @@ function CameraPanel() {
   const ensureOcrWorker = useCallback(async () => {
     if (!ocrWorkerRef.current) {
       console.log('Initializing Tesseract.js worker...');
+      const { createWorker } = await import('tesseract.js');
       ocrWorkerRef.current = await createWorker('eng', 1, {
         logger: (m) => {
           if (m.status === 'recognizing text') {
@@ -851,7 +889,7 @@ function CameraPanel() {
         },
       });
 
-      await ocrWorkerRef.current.setParameters(BASE_OCR_PARAMS);
+      await ocrWorkerRef.current.setParameters(BASE_OCR_PARAMS as unknown as TesseractWorkerParams);
 
       console.log('Tesseract.js worker initialized');
     }
@@ -956,11 +994,11 @@ function CameraPanel() {
 
     const worker = await ensureOcrWorker();
     if (options?.ocrParams) {
-      await worker.setParameters(options.ocrParams);
+      await worker.setParameters(options.ocrParams as unknown as TesseractWorkerParams);
     }
     const result = await worker.recognize(ocrCanvas);
     if (options?.ocrParams) {
-      await worker.setParameters(BASE_OCR_PARAMS);
+      await worker.setParameters(BASE_OCR_PARAMS as unknown as TesseractWorkerParams);
     }
 
     // Extract word-level data from Tesseract's nested structure
@@ -1782,6 +1820,8 @@ function CameraPanel() {
     setNumberPreOcrImageUrl(null);
 
     try {
+      await waitForVideoToSettle(video);
+
       if (RAW_MNEMONIC_OCR_DEBUG_ONLY) {
         const rawResult = await runOcrOnRegion(MNEMONIC_SCENE, {
           ocrParams: MNEMONIC_OCR_PARAMS,
@@ -2294,6 +2334,13 @@ function CameraPanel() {
       let preOcrSaved = false;
 
       try {
+        const video = videoRef.current;
+        if (!video || video.readyState < 2) {
+          throw new Error('Video not ready for OCR');
+        }
+
+        await waitForVideoToSettle(video);
+
         if (RAW_MNEMONIC_OCR_DEBUG_ONLY) {
           const rawResult = await runOcrOnRegion(MNEMONIC_SCENE, {
             ocrParams: MNEMONIC_OCR_PARAMS,
