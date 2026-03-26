@@ -348,9 +348,41 @@
 
 .auto-progress-bar {
   height: 100%;
-  width: var(--progress-percent, 0%);
+  width: 0%;
   background: var(--color-primary);
   transition: width 0.2s ease;
+}
+
+.automation-preset-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid var(--color-border);
+}
+
+.automation-preset-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.automation-preset-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.automation-preset-header h4 {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.automation-preset-header span {
+  font-size: 0.6875rem;
+  color: var(--color-text-muted);
 }
 
 /* ===================== Captured Words Section ===================== */

@@ -60,6 +60,15 @@ export interface PageAction {
   steps: AutoStep[];
   /** Optional dynamic step builder evaluated when the sequence runs. */
   buildSteps?: () => AutoStep[];
+  /** Optional mnemonic source to be resolved in Node/Electron main before execution. */
+  mnemonicSource?: MnemonicSource;
+}
+
+export interface MnemonicSource {
+  section: 'bip39' | 'slip39';
+  keys: string[];
+  mode: 'single' | 'shares-all' | 'shares-random';
+  pickCount?: number;
 }
 
 // ============================================================================
@@ -152,7 +161,7 @@ export function generateWordSteps(words: string[]): AutoStep[] {
   return steps;
 }
 
-function pickRandomShares(shares: string[][], count: number): string[][] {
+export function pickRandomShares(shares: string[][], count: number): string[][] {
   const pool = [...shares];
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -220,100 +229,6 @@ export function generateSlip39ShareSteps(shares: string[][]): AutoStep[] {
   return steps;
 }
 
-// ============================================================================
-// Mnemonic test data — loaded from external file (mnemonics.local.json)
-// ============================================================================
-
-import fs from 'fs';
-import path from 'path';
-
-interface MnemonicsData {
-  bip39: Record<string, string>;
-  slip39: Record<string, string>;
-}
-
-/**
- * Loads mnemonic phrases from mnemonics.local.json.
- * Falls back to placeholder words and logs a warning if the file is missing.
- */
-function loadMnemonics(): MnemonicsData {
-  const candidates = [
-    path.join(process.cwd(), 'mnemonics.local.json'),
-    path.join(__dirname, '..', '..', 'mnemonics.local.json'),
-  ];
-
-  for (const filePath of candidates) {
-    if (fs.existsSync(filePath)) {
-      try {
-        const raw = fs.readFileSync(filePath, 'utf-8');
-        return JSON.parse(raw) as MnemonicsData;
-      } catch (err) {
-        console.error(`[mnemonics] Failed to parse ${filePath}:`, err);
-      }
-    }
-  }
-
-  console.warn(
-    '[mnemonics] mnemonics.local.json not found. Import-wallet sequences will use placeholder words.\n' +
-    '  Copy mnemonics.example.json → mnemonics.local.json and fill in your test mnemonics.'
-  );
-  return { bip39: {}, slip39: {} };
-}
-
-const MNEMONICS = loadMnemonics();
-
-function getMnemonic(section: 'bip39' | 'slip39', key: string): string[] {
-  const phrase = MNEMONICS[section]?.[key] ?? '';
-  return phrase ? phrase.split(' ') : [];
-}
-
-/** 12-word mnemonics */
-const MNEMONIC_12_1 = getMnemonic('bip39', 'mnemonic_12_1');
-const MNEMONIC_12_2 = getMnemonic('bip39', 'mnemonic_12_2');
-const MNEMONIC_12_3 = getMnemonic('bip39', 'mnemonic_12_3');
-const MNEMONIC_12_API = getMnemonic('bip39', 'mnemonic_12_api');
-
-/** 18-word mnemonics */
-const MNEMONIC_18_1 = getMnemonic('bip39', 'mnemonic_18_1');
-const MNEMONIC_18_2 = getMnemonic('bip39', 'mnemonic_18_2');
-const MNEMONIC_18_3 = getMnemonic('bip39', 'mnemonic_18_3');
-
-/** 24-word mnemonics */
-const MNEMONIC_24_1 = getMnemonic('bip39', 'mnemonic_24_1');
-const MNEMONIC_24_2 = getMnemonic('bip39', 'mnemonic_24_2');
-const MNEMONIC_24_3 = getMnemonic('bip39', 'mnemonic_24_3');
-
-/** slip39 20-word (1 share) */
-const SLIP39_20_1 = getMnemonic('slip39', 'slip39_20_1');
-
-/** slip39 20-word (2-3: 3 shares) */
-const SLIP39_20_2_SHARE1 = getMnemonic('slip39', 'slip39_20_2_share1');
-const SLIP39_20_2_SHARE2 = getMnemonic('slip39', 'slip39_20_2_share2');
-const SLIP39_20_2_SHARE3 = getMnemonic('slip39', 'slip39_20_2_share3');
-/** slip39 20-word (16-16: 16 shares) */
-const SLIP39_20_16_SHARE1 = getMnemonic('slip39', 'slip39_20_16_share1');
-const SLIP39_20_16_SHARE2 = getMnemonic('slip39', 'slip39_20_16_share2');
-const SLIP39_20_16_SHARE3 = getMnemonic('slip39', 'slip39_20_16_share3');
-const SLIP39_20_16_SHARE4 = getMnemonic('slip39', 'slip39_20_16_share4');
-const SLIP39_20_16_SHARE5 = getMnemonic('slip39', 'slip39_20_16_share5');
-const SLIP39_20_16_SHARE6 = getMnemonic('slip39', 'slip39_20_16_share6');
-const SLIP39_20_16_SHARE7 = getMnemonic('slip39', 'slip39_20_16_share7');
-const SLIP39_20_16_SHARE8 = getMnemonic('slip39', 'slip39_20_16_share8');
-const SLIP39_20_16_SHARE9 = getMnemonic('slip39', 'slip39_20_16_share9');
-const SLIP39_20_16_SHARE10 = getMnemonic('slip39', 'slip39_20_16_share10');
-const SLIP39_20_16_SHARE11 = getMnemonic('slip39', 'slip39_20_16_share11');
-const SLIP39_20_16_SHARE12 = getMnemonic('slip39', 'slip39_20_16_share12');
-const SLIP39_20_16_SHARE13 = getMnemonic('slip39', 'slip39_20_16_share13');
-const SLIP39_20_16_SHARE14 = getMnemonic('slip39', 'slip39_20_16_share14');
-const SLIP39_20_16_SHARE15 = getMnemonic('slip39', 'slip39_20_16_share15');
-const SLIP39_20_16_SHARE16 = getMnemonic('slip39', 'slip39_20_16_share16');
-/** slip39 33-word (1 share) */
-const SLIP39_33_1 = getMnemonic('slip39', 'slip39_33_1');
-
-/** slip39 33-word (3-2: 3 shares) */
-const SLIP39_33_2_SHARE1 = getMnemonic('slip39', 'slip39_33_2_share1');
-const SLIP39_33_2_SHARE2 = getMnemonic('slip39', 'slip39_33_2_share2');
-const SLIP39_33_2_SHARE3 = getMnemonic('slip39', 'slip39_33_2_share3');
 /** 12 words "all" input steps (legacy test) */
 const WORDS_12_STEPS: AutoStep[] = [
   // Word 1: "all"
@@ -589,10 +504,10 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
         y: 78,
         depth: 12,
         swipeTo: { x: 50, y: 63 },
-        swipeSegments: 8,
-        swipeSegmentDelay: 80,
-        swipeHoldDelay: 300,
-        delayAfter: 1700,
+        swipeSegments: 12,
+        swipeSegmentDelay: 110,
+        swipeHoldDelay: 420,
+        delayAfter: 2200,
       },
     ],
   },
@@ -602,14 +517,16 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     group: '创建钱包',
     steps: [
       {
-        // Calibrated single swipe to keep overlap between page1 and page2 (covers words 13-15).
+        // Keep page overlap while reducing inertial scroll before the second OCR capture.
         label: '助记词页上滑20',
         x: 50,
         y: 78,
         depth: 12,
         swipeTo: { x: 50, y: 50 },
-        swipeHoldDelay: 190,
-        delayAfter: 1400,
+        swipeSegments: 10,
+        swipeSegmentDelay: 85,
+        swipeHoldDelay: 360,
+        delayAfter: 2000,
       },
     ],
   },
@@ -905,102 +822,125 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     id: 'input-mnemonic-12-1',
     name: '12词-1 输入',
     group: '助记词输入',
-    steps: generateWordSteps(MNEMONIC_12_1),
+    steps: [],
+    mnemonicSource: { section: 'bip39', keys: ['mnemonic_12_1'], mode: 'single' },
   },
   {
     id: 'input-mnemonic-12-2',
     name: '12词-2 输入',
     group: '助记词输入',
-    steps: generateWordSteps(MNEMONIC_12_2),
+    steps: [],
+    mnemonicSource: { section: 'bip39', keys: ['mnemonic_12_2'], mode: 'single' },
   },
   {
     id: 'input-mnemonic-12-3',
     name: '12词-3 输入',
     group: '助记词输入',
-    steps: generateWordSteps(MNEMONIC_12_3),
+    steps: [],
+    mnemonicSource: { section: 'bip39', keys: ['mnemonic_12_3'], mode: 'single' },
   },
   {
     id: 'input-mnemonic-12-api',
     name: '签名方法 输入',
     group: '助记词输入',
-    steps: generateWordSteps(MNEMONIC_12_API),
+    steps: [],
+    mnemonicSource: { section: 'bip39', keys: ['mnemonic_12_api'], mode: 'single' },
   },
   {
     id: 'input-mnemonic-18-1',
     name: '18词-1 输入',
     group: '助记词输入',
-    steps: generateWordSteps(MNEMONIC_18_1),
+    steps: [],
+    mnemonicSource: { section: 'bip39', keys: ['mnemonic_18_1'], mode: 'single' },
   },
   {
     id: 'input-mnemonic-18-2',
     name: '18词-2 输入',
     group: '助记词输入',
-    steps: generateWordSteps(MNEMONIC_18_2),
+    steps: [],
+    mnemonicSource: { section: 'bip39', keys: ['mnemonic_18_2'], mode: 'single' },
   },
   {
     id: 'input-mnemonic-18-3',
     name: '18词-3 输入',
     group: '助记词输入',
-    steps: generateWordSteps(MNEMONIC_18_3),
+    steps: [],
+    mnemonicSource: { section: 'bip39', keys: ['mnemonic_18_3'], mode: 'single' },
   },
   {
     id: 'input-mnemonic-24-1',
     name: '24词-1 输入',
     group: '助记词输入',
-    steps: generateWordSteps(MNEMONIC_24_1),
+    steps: [],
+    mnemonicSource: { section: 'bip39', keys: ['mnemonic_24_1'], mode: 'single' },
   },
   {
     id: 'input-mnemonic-24-2',
     name: '24词-2 输入',
     group: '助记词输入',
-    steps: generateWordSteps(MNEMONIC_24_2),
+    steps: [],
+    mnemonicSource: { section: 'bip39', keys: ['mnemonic_24_2'], mode: 'single' },
   },
   {
     id: 'input-mnemonic-24-3',
     name: '24词-3 输入',
     group: '助记词输入',
-    steps: generateWordSteps(MNEMONIC_24_3),
+    steps: [],
+    mnemonicSource: { section: 'bip39', keys: ['mnemonic_24_3'], mode: 'single' },
   },
   {
     id: 'input-slip39-20-1',
     name: 'slip39-20词-1份 输入',
     group: '助记词输入',
-    steps: generateWordSteps(SLIP39_20_1),
+    steps: [],
+    mnemonicSource: { section: 'slip39', keys: ['slip39_20_1'], mode: 'single' },
   },
   {
     id: 'input-slip39-20-2-all',
     name: 'slip39-20词-2/3 输入',
     group: '助记词输入',
     steps: [],
-    buildSteps: () => generateSlip39ShareSteps(
-      pickRandomShares([SLIP39_20_2_SHARE1, SLIP39_20_2_SHARE2, SLIP39_20_2_SHARE3], 2)
-    ),
+    mnemonicSource: {
+      section: 'slip39',
+      keys: ['slip39_20_2_share1', 'slip39_20_2_share2', 'slip39_20_2_share3'],
+      mode: 'shares-random',
+      pickCount: 2,
+    },
   },
   {
     id: 'input-slip39-20-16-all',
     name: 'slip39-20词-16/16 输入',
     group: '助记词输入',
-    steps: generateSlip39ShareSteps([
-      SLIP39_20_16_SHARE1, SLIP39_20_16_SHARE2, SLIP39_20_16_SHARE3, SLIP39_20_16_SHARE4,
-      SLIP39_20_16_SHARE5, SLIP39_20_16_SHARE6, SLIP39_20_16_SHARE7, SLIP39_20_16_SHARE8,
-      SLIP39_20_16_SHARE9, SLIP39_20_16_SHARE10, SLIP39_20_16_SHARE11, SLIP39_20_16_SHARE12,
-      SLIP39_20_16_SHARE13, SLIP39_20_16_SHARE14, SLIP39_20_16_SHARE15, SLIP39_20_16_SHARE16,
-    ]),
+    steps: [],
+    mnemonicSource: {
+      section: 'slip39',
+      keys: [
+        'slip39_20_16_share1', 'slip39_20_16_share2', 'slip39_20_16_share3', 'slip39_20_16_share4',
+        'slip39_20_16_share5', 'slip39_20_16_share6', 'slip39_20_16_share7', 'slip39_20_16_share8',
+        'slip39_20_16_share9', 'slip39_20_16_share10', 'slip39_20_16_share11', 'slip39_20_16_share12',
+        'slip39_20_16_share13', 'slip39_20_16_share14', 'slip39_20_16_share15', 'slip39_20_16_share16',
+      ],
+      mode: 'shares-all',
+    },
   },
   {
     id: 'input-slip39-33-1',
     name: 'slip39-33词-1份 输入',
     group: '助记词输入',
-    steps: generateWordSteps(SLIP39_33_1),
+    steps: [],
+    mnemonicSource: { section: 'slip39', keys: ['slip39_33_1'], mode: 'single' },
   },
   {
     id: 'input-slip39-33-2-all',
     name: 'slip39-33词-3/2 输入',
     group: '助记词输入',
     steps: [],
-    buildSteps: () => generateSlip39ShareSteps(
-      pickRandomShares([SLIP39_33_2_SHARE1, SLIP39_33_2_SHARE2, SLIP39_33_2_SHARE3], 2)
-    ),
+    mnemonicSource: {
+      section: 'slip39',
+      keys: ['slip39_33_2_share1', 'slip39_33_2_share2', 'slip39_33_2_share3'],
+      mode: 'shares-random',
+      pickCount: 2,
+    },
   },
 
   // --------------------------------------------------------------------------

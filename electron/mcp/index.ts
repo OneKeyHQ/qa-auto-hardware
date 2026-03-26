@@ -28,6 +28,10 @@ import {
   executeExecuteSequence,
   confirmActionSchema,
   executeConfirmAction,
+  confirmActionSequenceSchema,
+  executeConfirmActionSequence,
+  executeAutomationPresetSchema,
+  executeAutomationPreset,
   inputPinSchema,
   executeInputPin,
   stopSequenceSchema,
@@ -292,6 +296,80 @@ export class QAAutoHardwareMcpServer {
         sendMcpLog({
           type: output.success ? 'response' : 'error',
           action: 'confirm-action',
+          detail: output.message,
+        });
+        const content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(output, null, 2),
+          },
+        ];
+
+        if (frame) {
+          content.push({
+            type: 'image' as const,
+            data: frame,
+            mimeType: 'image/jpeg',
+          });
+        }
+
+        return { content };
+      }
+    );
+
+    mcpServer.registerTool(
+      'confirm-action-sequence',
+      {
+        description: 'Execute an ordered sequence of device actions such as confirm and slide-to-confirm on the PhonePilot side.',
+        inputSchema: confirmActionSequenceSchema,
+      },
+      async (args) => {
+        sendMcpLog({
+          type: 'request',
+          action: 'confirm-action-sequence',
+          detail: `Steps: ${args.steps.join(' -> ')}`,
+        });
+        const { output, frame } = await executeConfirmActionSequence(args, this.httpRequest);
+        sendMcpLog({
+          type: output.success ? 'response' : 'error',
+          action: 'confirm-action-sequence',
+          detail: output.message,
+        });
+        const content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(output, null, 2),
+          },
+        ];
+
+        if (frame) {
+          content.push({
+            type: 'image' as const,
+            data: frame,
+            mimeType: 'image/jpeg',
+          });
+        }
+
+        return { content };
+      }
+    );
+
+    mcpServer.registerTool(
+      'execute-automation-preset',
+      {
+        description: 'Resolve and execute a shared automation preset for security-check, chain-method-batch, or device-settings directly on the PhonePilot side.',
+        inputSchema: executeAutomationPresetSchema,
+      },
+      async (args) => {
+        sendMcpLog({
+          type: 'request',
+          action: 'execute-automation-preset',
+          detail: `${args.suite}/${args.presetId}`,
+        });
+        const { output, frame } = await executeAutomationPreset(args, this.httpRequest);
+        sendMcpLog({
+          type: output.success ? 'response' : 'error',
+          action: 'execute-automation-preset',
           detail: output.message,
         });
         const content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [

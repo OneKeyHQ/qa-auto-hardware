@@ -1,7 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import electron from 'vite-plugin-electron';
-import renderer from 'vite-plugin-electron-renderer';
 import path from 'path';
 
 // https://vitejs.dev/config/
@@ -41,7 +40,6 @@ export default defineConfig({
         },
       },
     ]),
-    renderer(),
   ],
   resolve: {
     alias: {
@@ -52,6 +50,9 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     sourcemap: true,
+  },
+  optimizeDeps: {
+    exclude: ['tesseract.js'],
   },
   server: {
     port: 5173,

@@ -19,8 +19,15 @@ import {
   getAllCategories,
   getSequencesByCategory,
   type AutoSequence,
+  type AutoStep,
 } from '../../electron/mcp/sequences';
 import { executeClickStep, executeSwipeStep } from '../../electron/mcp/utils/executeStep';
+import {
+  getAutomationPresetEntries,
+  resolveAutomationPresetSteps,
+  type AutomationPresetSuite,
+} from '../../electron/mcp/automationActionPresets';
+import { executeDeviceActionSequence } from '../../electron/mcp/deviceActionRuntime';
 
 // Get all sequences from the shared definition
 const OPERATION_SEQUENCES: AutoSequence[] = getAllSequenceIds()
@@ -29,6 +36,8 @@ const OPERATION_SEQUENCES: AutoSequence[] = getAllSequenceIds()
 
 // Get all categories for the sequence panel
 const SEQUENCE_CATEGORIES = getAllCategories();
+const SECURITY_CHECK_PRESETS = getAutomationPresetEntries('securityCheck');
+const CHAIN_METHOD_BATCH_PRESETS = getAutomationPresetEntries('chainMethodBatch');
 
 interface ControlPanelState {
   isConnected: boolean;
@@ -44,6 +53,8 @@ interface ControlPanelState {
   error: string | null;
   isAutoRunning: boolean;
   autoProgress: number;
+  autoTotalSteps: number;
+  activeOperationKey: string;
   selectedSequenceId: string;
   selectedCategory: string;
   /** Words captured via OCR during create-wallet flow */
@@ -78,6 +89,10 @@ interface SequenceVerifyOcrResult {
   reason?: string;
 }
 
+function hasSwipeTarget(step: AutoStep): step is AutoStep & { swipeTo: { x: number; y: number } } {
+  return step.swipeTo !== undefined;
+}
+
 function ControlPanel() {
   const [state, setState] = useState<ControlPanelState>({
     isConnected: false,
@@ -93,6 +108,8 @@ function ControlPanel() {
     error: null,
     isAutoRunning: false,
     autoProgress: 0,
+    autoTotalSteps: 0,
+    activeOperationKey: '',
     selectedSequenceId: OPERATION_SEQUENCES[0].id,
     selectedCategory: SEQUENCE_CATEGORIES[0],
     capturedWords: [],
@@ -110,6 +127,13 @@ function ControlPanel() {
       { id: Date.now(), time, action, detail },
       ...prev.slice(0, 49),
     ]);
+  }, []);
+
+  const resolveSequenceStepsForUi = useCallback(async (sequence: AutoSequence): Promise<AutoStep[]> => {
+    if (window.electronAPI?.resolveSequenceSteps) {
+      return window.electronAPI.resolveSequenceSteps(sequence.id);
+    }
+    return getFullSteps(sequence);
   }, []);
 
   /**
@@ -488,7 +512,7 @@ function ControlPanel() {
    * Executes an auto operation sequence.
    * If sequenceId is provided, runs that sequence; otherwise uses the currently selected one.
    */
-  const handleAutoOperation = async (sequenceId?: string) => {
+  const handleAutoOperation = useCallback(async (sequenceId?: string) => {
     if (state.isLoading || !state.isConnected || !state.isReady || state.isAutoRunning) return;
 
     const targetId = sequenceId || state.selectedSequenceId;
@@ -500,13 +524,20 @@ function ControlPanel() {
       setState(prev => ({ ...prev, selectedSequenceId: targetId }));
     }
 
-    // getFullSteps is now imported from sequences.ts
-    const steps = getFullSteps(sequence);
+    const steps = await resolveSequenceStepsForUi(sequence);
     const totalVerifySteps = steps.filter((step) => !!step.ocrVerify).length;
     let finishedVerifySteps = 0;
 
     autoOperationCancelledRef.current = false;
-    setState(prev => ({ ...prev, isAutoRunning: true, autoProgress: 0, error: null, capturedWords: [] }));
+    setState(prev => ({
+      ...prev,
+      isAutoRunning: true,
+      autoProgress: 0,
+      autoTotalSteps: steps.length,
+      activeOperationKey: `sequence:${targetId}`,
+      error: null,
+      capturedWords: [],
+    }));
     addLog('自动', `开始执行自动操作序列: ${sequence.name}`);
 
     // Shared send helper and config for the step executor utilities
@@ -535,8 +566,8 @@ function ControlPanel() {
 
           addLog('自动', `${step.label} - 移动到 (${step.x},${step.y})，等待验证OCR...`);
 
-          // Wait for arm to settle
-          await delay(1000);
+          // Give the camera feed time to settle before verification OCR.
+          await delay(1600);
 
           // Trigger verification OCR and wait for result (with 45s timeout)
           const verifyResult = await Promise.race([
@@ -605,8 +636,8 @@ function ControlPanel() {
 
           addLog('自动', `${step.label} - 移动到 (${step.x},${step.y})，等待OCR识别...`);
 
-          // Wait for arm to settle
-          await delay(1000);
+          // Give the camera feed time to settle before mnemonic OCR.
+          await delay(1600);
 
           // Trigger OCR and wait for result (with 45s timeout)
           const ocrResult = await Promise.race([
@@ -641,9 +672,9 @@ function ControlPanel() {
           if ((!ocrResult.success && !canContinueWithPartial) || ocrResult.words.length === 0) {
             throw new Error(`助记词OCR失败: ${ocrResult.reason || 'no words recognized'}`);
           }
-        } else if (step.swipeTo) {
+        } else if (hasSwipeTarget(step)) {
           // Swipe: shared utility (consistent with MCP)
-          await executeSwipeStep(step as typeof step & { swipeTo: { x: number; y: number } }, send, delay, stepConfig);
+          await executeSwipeStep(step, send, delay, stepConfig);
           addLog('自动', `${step.label} (${step.x},${step.y}) → (${step.swipeTo.x},${step.swipeTo.y})`);
         } else {
           // Click: shared utility (consistent with MCP)
@@ -665,9 +696,79 @@ function ControlPanel() {
         error: error instanceof Error ? error.message : 'Auto operation failed',
       }));
     } finally {
-      setState(prev => ({ ...prev, isAutoRunning: false, autoProgress: 0 }));
+      setState(prev => ({
+        ...prev,
+        isAutoRunning: false,
+        autoProgress: 0,
+        autoTotalSteps: 0,
+        activeOperationKey: '',
+      }));
     }
-  };
+  }, [addLog, resolveSequenceStepsForUi, sendCommand, state.isAutoRunning, state.isConnected, state.isLoading, state.isReady, state.resourceHandle, state.selectedSequenceId]);
+
+  const handleAutomationPresetRun = useCallback(async (
+    suite: Exclude<AutomationPresetSuite, 'deviceSettings'>,
+    presetId: string
+  ) => {
+    if (state.isLoading || !state.isConnected || !state.isReady || state.isAutoRunning) return;
+
+    const steps = resolveAutomationPresetSteps({
+      suite,
+      presetId,
+      expectedResult: suite === 'securityCheck' ? true : undefined,
+    });
+
+    setState(prev => ({
+      ...prev,
+      isAutoRunning: true,
+      autoProgress: 0,
+      autoTotalSteps: steps.length,
+      activeOperationKey: `preset:${suite}:${presetId}`,
+      error: null,
+    }));
+    addLog('Preset', `开始执行 ${suite} / ${presetId}`);
+
+    try {
+      const send = async (daima: string) => {
+        await sendCommand({ duankou: '0', hco: state.resourceHandle, daima });
+      };
+
+      if (steps.length === 0) {
+        addLog('Preset', `${suite} / ${presetId} 当前无设备动作`);
+      } else {
+        await executeDeviceActionSequence(
+          steps,
+          send,
+          delay,
+          {
+            clickDelay: ARM_CONTROLLER_CONFIG.clickDelay,
+            zUp: ARM_CONTROLLER_CONFIG.zUp,
+            defaultZDepth: ARM_CONTROLLER_CONFIG.defaultZDepth,
+          },
+          {
+            startDelayMs: 500,
+            betweenStepsDelayMs: 300,
+          }
+        );
+        setState(prev => ({ ...prev, autoProgress: steps.length }));
+        addLog('Preset', `${suite} / ${presetId}: ${steps.join(' -> ')}`);
+      }
+    } catch (error) {
+      addLog('错误', `Preset 执行失败: ${error instanceof Error ? error.message : 'Unknown'}`);
+      setState(prev => ({
+        ...prev,
+        error: error instanceof Error ? error.message : 'Preset execution failed',
+      }));
+    } finally {
+      setState(prev => ({
+        ...prev,
+        isAutoRunning: false,
+        autoProgress: 0,
+        autoTotalSteps: 0,
+        activeOperationKey: '',
+      }));
+    }
+  }, [addLog, sendCommand, state.isAutoRunning, state.isConnected, state.isLoading, state.isReady, state.resourceHandle]);
 
   /**
    * Cancels the ongoing auto operation.
@@ -679,7 +780,6 @@ function ControlPanel() {
   const isControlDisabled = !state.isConnected || !state.isReady || state.isLoading || state.isAutoRunning;
 
   const categorySequences = getSequencesByCategory(state.selectedCategory);
-  const runningSequence = OPERATION_SEQUENCES.find(s => s.id === state.selectedSequenceId);
   const capturedFilledCount = state.capturedWords.filter((word) => !!word).length;
 
   return (
@@ -799,7 +899,7 @@ function ControlPanel() {
           </div>
           <div className="sequence-list">
             {categorySequences.map(seq => {
-              const isRunning = state.isAutoRunning && state.selectedSequenceId === seq.id;
+              const isRunning = state.isAutoRunning && state.activeOperationKey === `sequence:${seq.id}`;
               return (
                 <button
                   key={seq.id}
@@ -814,23 +914,73 @@ function ControlPanel() {
                   disabled={(!isRunning && isControlDisabled) || (state.isAutoRunning && !isRunning)}
                 >
                   <span className="seq-btn-name">{seq.name}</span>
-                  {isRunning && runningSequence && (
+                  {isRunning && (
                     <span className="seq-btn-progress">
-                      {state.autoProgress}/{getFullSteps(runningSequence).length}
+                      {state.autoProgress}/{state.autoTotalSteps}
                     </span>
                   )}
                 </button>
               );
             })}
           </div>
-          {state.isAutoRunning && runningSequence && (
-            <div
-              className="auto-progress"
-              style={{ '--progress-percent': `${(state.autoProgress / getFullSteps(runningSequence).length) * 100}%` } as React.CSSProperties}
-            >
-              <div className="auto-progress-bar" />
+          {state.isAutoRunning && state.autoTotalSteps > 0 && (
+            <div className="auto-progress">
+              <div
+                className="auto-progress-bar"
+                style={{
+                  width: `${(state.autoProgress / Math.max(1, state.autoTotalSteps)) * 100}%`,
+                }}
+              />
             </div>
           )}
+          <div className="automation-preset-section">
+            <div className="automation-preset-block">
+              <div className="automation-preset-header">
+                <h4>Security Check</h4>
+                <span>共享 preset</span>
+              </div>
+              <div className="sequence-list">
+                {SECURITY_CHECK_PRESETS.map(preset => {
+                  const key = `preset:securityCheck:${preset.id}`;
+                  const isRunning = state.isAutoRunning && state.activeOperationKey === key;
+                  return (
+                    <button
+                      key={preset.id}
+                      className={`sequence-btn ${isRunning ? 'running' : ''}`}
+                      onClick={() => handleAutomationPresetRun('securityCheck', preset.id)}
+                      disabled={isControlDisabled || (state.isAutoRunning && !isRunning)}
+                      title={preset.steps.join(' -> ')}
+                    >
+                      <span className="seq-btn-name">{preset.id}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="automation-preset-block">
+              <div className="automation-preset-header">
+                <h4>ChainMethodBatch</h4>
+                <span>共享 preset</span>
+              </div>
+              <div className="sequence-list">
+                {CHAIN_METHOD_BATCH_PRESETS.map(preset => {
+                  const key = `preset:chainMethodBatch:${preset.id}`;
+                  const isRunning = state.isAutoRunning && state.activeOperationKey === key;
+                  return (
+                    <button
+                      key={preset.id}
+                      className={`sequence-btn ${isRunning ? 'running' : ''}`}
+                      onClick={() => handleAutomationPresetRun('chainMethodBatch', preset.id)}
+                      disabled={isControlDisabled || (state.isAutoRunning && !isRunning)}
+                      title={preset.steps.join(' -> ')}
+                    >
+                      <span className="seq-btn-name">{preset.id}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

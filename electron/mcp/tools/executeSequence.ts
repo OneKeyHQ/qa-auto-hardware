@@ -22,6 +22,7 @@ import {
   setStopSequenceFlag,
 } from '../state';
 import { getSequence, getPageAction, getAllSequenceIds } from '../sequences';
+import { resolvePageActionSteps } from '../sequenceResolver';
 import { saveCaptureToDownloads } from '../../saveCapture';
 import { executeClickStep, executeSwipeStep } from '../utils/executeStep';
 
@@ -61,6 +62,15 @@ const SLIP39_CREATE_SEQUENCE_CONFIG: Record<
   'create-slip39-multi-16of2-template': { shareCount: 16, threshold: 2 },
 };
 
+// The device firmware can still be finalizing wallet state right after
+// import/create flows complete. Hold the response briefly so the next test
+// does not start against a busy device.
+const POST_WALLET_FLOW_COOLDOWN_MS = 5000;
+
+function requiresPostSequenceCooldown(sequence: { category: string; actions: string[] }): boolean {
+  return sequence.category === '创建钱包' || sequence.actions.includes('nav-import');
+}
+
 /**
  * Executes a single step (click, swipe, or OCR capture).
  */
@@ -85,8 +95,8 @@ async function executeStep(
     await send(`X${step.x}Y${step.y}`);
     updateArmState({ currentX: step.x, currentY: step.y });
 
-    // Wait for arm to settle, then run OCR capture in renderer.
-    await delay(1000);
+    // Give the device screen time to finish inertial scrolling before capture.
+    await delay(1600);
 
     const ocrResult = await runMnemonicOcr(ocrCaptureConfig);
     if (!ocrResult) {
@@ -220,7 +230,7 @@ export async function executeExecuteSequence(
         frame: null,
       };
     }
-    resolvedActions.push({ action, steps: action.buildSteps ? action.buildSteps() : action.steps });
+    resolvedActions.push({ action, steps: resolvePageActionSteps(action) });
   }
   const totalSteps = resolvedActions.reduce((sum, { steps }) => sum + steps.length, 0);
   let stepsCompleted = 0;
@@ -296,6 +306,14 @@ export async function executeExecuteSequence(
       }
     }
 
+    const needsCooldown = requiresPostSequenceCooldown(sequence);
+    if (needsCooldown) {
+      console.log(
+        `[execute-sequence] Cooling down for ${POST_WALLET_FLOW_COOLDOWN_MS}ms after ${sequence.id}`
+      );
+      await delay(POST_WALLET_FLOW_COOLDOWN_MS);
+    }
+
     // Capture frame if requested
     let frame: string | null = null;
     if (input.returnFrame !== false) {
@@ -305,7 +323,9 @@ export async function executeExecuteSequence(
     return {
       output: {
         success: true,
-        message: `Sequence "${sequence.name}" completed successfully`,
+        message: needsCooldown
+          ? `Sequence "${sequence.name}" completed successfully after ${POST_WALLET_FLOW_COOLDOWN_MS}ms cooldown`
+          : `Sequence "${sequence.name}" completed successfully`,
         sequenceId: sequence.id,
         sequenceName: sequence.name,
         stepsCompleted,

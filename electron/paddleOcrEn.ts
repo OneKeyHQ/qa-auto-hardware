@@ -56,6 +56,15 @@ const REQUIRED_MODEL_FILES = ['inference.json', 'inference.pdiparams', 'inferenc
 
 let cachedHealthStatus: { expiresAt: number; value: PaddleOcrEnHealthStatus } | null = null;
 
+function isGitLfsPointerFile(filePath: string): boolean {
+  try {
+    const header = fs.readFileSync(filePath, 'utf8').slice(0, 128);
+    return header.startsWith('version https://git-lfs.github.com/spec/v1');
+  } catch {
+    return false;
+  }
+}
+
 function resolvePythonBin(): string {
   if (process.env.QA_AUTO_HW_PYTHON_BIN) {
     return process.env.QA_AUTO_HW_PYTHON_BIN;
@@ -178,6 +187,8 @@ function collectMissingModels(): string[] {
       const filePath = path.join(modelDir, fileName);
       if (!fs.existsSync(filePath)) {
         missingModels.push(`${config.name}: missing ${fileName}`);
+      } else if (isGitLfsPointerFile(filePath)) {
+        missingModels.push(`${config.name}: ${fileName} is a Git LFS pointer, not a real model file`);
       }
     }
   }

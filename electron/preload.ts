@@ -35,6 +35,28 @@ interface PaddleOcrEnPayload {
   elapsedMs: number;
 }
 
+interface ResolvedSequenceStepPayload {
+  label: string;
+  x: number;
+  y: number;
+  depth: number;
+  delayBefore?: number;
+  delayAfter?: number;
+  swipeTo?: { x: number; y: number };
+  swipeSegments?: number;
+  swipeSegmentDelay?: number;
+  swipeHoldDelay?: number;
+  ocrCapture?: boolean | {
+    expectedWordCount?: number;
+    mergeWithStored?: boolean;
+    allowPartial?: boolean;
+    requireBip39?: boolean;
+  };
+  ocrVerify?: {
+    options: { x: number; y: number; depth: number }[];
+  };
+}
+
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -60,6 +82,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // HTTP request (bypasses CORS by going through main process)
   httpRequest: (url: string) => ipcRenderer.invoke('http-request', url),
+
+  resolveSequenceSteps: (sequenceId: string) =>
+    ipcRenderer.invoke('resolve-sequence-steps', sequenceId) as Promise<ResolvedSequenceStepPayload[]>,
 
   tryRecoverArmConnection: (payload: { serverIP: string; comPort: string }) =>
     ipcRenderer.invoke('try-recover-arm-connection', payload) as Promise<{
@@ -200,6 +225,7 @@ declare global {
       onMainProcessMessage: (callback: (message: string) => void) => void;
       sendMessage: (channel: string, data: unknown) => void;
       httpRequest: (url: string) => Promise<{ status: number; data: string }>;
+      resolveSequenceSteps: (sequenceId: string) => Promise<ResolvedSequenceStepPayload[]>;
       tryRecoverArmConnection: (payload: {
         serverIP: string;
         comPort: string;

@@ -41,6 +41,28 @@ interface PaddleOcrEnPayload {
   elapsedMs: number;
 }
 
+interface ResolvedSequenceStepPayload {
+  label: string;
+  x: number;
+  y: number;
+  depth: number;
+  delayBefore?: number;
+  delayAfter?: number;
+  swipeTo?: { x: number; y: number };
+  swipeSegments?: number;
+  swipeSegmentDelay?: number;
+  swipeHoldDelay?: number;
+  ocrCapture?: boolean | {
+    expectedWordCount?: number;
+    mergeWithStored?: boolean;
+    allowPartial?: boolean;
+    requireBip39?: boolean;
+  };
+  ocrVerify?: {
+    options: { x: number; y: number; depth: number }[];
+  };
+}
+
 interface Window {
   electronAPI: {
     getAppVersion: () => Promise<string>;
@@ -48,6 +70,7 @@ interface Window {
     onMainProcessMessage: (callback: (message: string) => void) => void;
     sendMessage: (channel: string, data: unknown) => void;
     httpRequest: (url: string) => Promise<{ status: number; data: string }>;
+    resolveSequenceSteps: (sequenceId: string) => Promise<ResolvedSequenceStepPayload[]>;
     tryRecoverArmConnection: (payload: {
       serverIP: string;
       comPort: string;
