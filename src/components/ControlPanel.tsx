@@ -704,7 +704,7 @@ function ControlPanel() {
         activeOperationKey: '',
       }));
     }
-  }, [addLog, resolveSequenceStepsForUi, state.isAutoRunning, state.isConnected, state.isLoading, state.isReady, state.resourceHandle, state.selectedSequenceId]);
+  }, [addLog, resolveSequenceStepsForUi, sendCommand, state.isAutoRunning, state.isConnected, state.isLoading, state.isReady, state.resourceHandle, state.selectedSequenceId]);
 
   const handleAutomationPresetRun = useCallback(async (
     suite: Exclude<AutomationPresetSuite, 'deviceSettings'>,
