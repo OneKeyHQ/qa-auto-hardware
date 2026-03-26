@@ -12,13 +12,15 @@ import {
   delay,
   ARM_CONFIG,
 } from '../state';
-import { DEVICE_BUTTONS } from '../sequences';
+import { executeDeviceAction, type DeviceAction } from '../deviceActionRuntime';
+
+export const deviceActionSchema = z.enum(['confirm', 'cancel', 'slide']);
 
 /** Input schema for confirm-action tool */
 export const confirmActionSchema = z.object({
-  action: z
-    .enum(['confirm', 'cancel'])
-    .describe('The action to perform: "confirm" to click the confirm button, "cancel" to click the cancel button'),
+  action: deviceActionSchema.describe(
+    'The action to perform: "confirm" to click confirm, "cancel" to click cancel, "slide" to perform the slide-to-confirm gesture'
+  ),
   returnFrame: z
     .boolean()
     .optional()
@@ -34,6 +36,38 @@ export interface ConfirmActionOutput {
   message: string;
   action?: string;
   position?: { x: number; y: number };
+}
+
+export async function performDeviceAction(
+  action: DeviceAction,
+  httpRequest: (url: string) => Promise<string>
+): Promise<{
+  message: string;
+  position: { x: number; y: number };
+}> {
+  const state = getArmState();
+  const send = async (daima: string) => {
+    await httpRequest(
+      buildArmApiUrl({
+        duankou: '0',
+        hco: state.resourceHandle,
+        daima,
+      })
+    );
+  };
+  const result = await executeDeviceAction(action, send, delay, {
+    clickDelay: ARM_CONFIG.clickDelay,
+    zUp: ARM_CONFIG.zUp,
+    defaultZDepth: ARM_CONFIG.defaultZDepth,
+  });
+  updateArmState({
+    currentX: result.x,
+    currentY: result.y,
+  });
+  return {
+    message: result.message,
+    position: { x: result.x, y: result.y },
+  };
 }
 
 /**
@@ -56,41 +90,8 @@ export async function executeConfirmAction(
     };
   }
 
-  const button = input.action === 'confirm' ? DEVICE_BUTTONS.confirm : DEVICE_BUTTONS.cancel;
-  const buttonName = input.action === 'confirm' ? 'Confirm' : 'Cancel';
-
   try {
-    // Move to button position
-    const moveUrl = buildArmApiUrl({
-      duankou: '0',
-      hco: state.resourceHandle,
-      daima: `X${button.x}Y${button.y}`,
-    });
-    await httpRequest(moveUrl);
-
-    // Lower stylus
-    const lowerUrl = buildArmApiUrl({
-      duankou: '0',
-      hco: state.resourceHandle,
-      daima: `Z${ARM_CONFIG.defaultZDepth}`,
-    });
-    await httpRequest(lowerUrl);
-
-    await delay(ARM_CONFIG.clickDelay);
-
-    // Raise stylus
-    const raiseUrl = buildArmApiUrl({
-      duankou: '0',
-      hco: state.resourceHandle,
-      daima: `Z${ARM_CONFIG.zUp}`,
-    });
-    await httpRequest(raiseUrl);
-
-    // Update position
-    updateArmState({
-      currentX: button.x,
-      currentY: button.y,
-    });
+    const actionResult = await performDeviceAction(input.action, httpRequest);
 
     // Wait a bit for device to process
     await delay(500);
@@ -104,9 +105,9 @@ export async function executeConfirmAction(
     return {
       output: {
         success: true,
-        message: `${buttonName} button clicked at (${button.x}, ${button.y})`,
+        message: actionResult.message,
         action: input.action,
-        position: { x: button.x, y: button.y },
+        position: actionResult.position,
       },
       frame,
     };
@@ -115,7 +116,7 @@ export async function executeConfirmAction(
     return {
       output: {
         success: false,
-        message: `${buttonName} action failed: ${errorMessage}`,
+        message: `${input.action} action failed: ${errorMessage}`,
         action: input.action,
       },
       frame: null,

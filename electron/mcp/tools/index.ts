@@ -25,6 +25,18 @@ export type { ExecuteSequenceInput, ExecuteSequenceOutput } from './executeSeque
 export { confirmActionSchema, executeConfirmAction } from './confirmAction';
 export type { ConfirmActionInput, ConfirmActionOutput } from './confirmAction';
 
+export { confirmActionSequenceSchema, executeConfirmActionSequence } from './confirmActionSequence';
+export type {
+  ConfirmActionSequenceInput,
+  ConfirmActionSequenceOutput,
+} from './confirmActionSequence';
+
+export { executeAutomationPresetSchema, executeAutomationPreset } from './executeAutomationPreset';
+export type {
+  ExecuteAutomationPresetInput,
+  ExecuteAutomationPresetOutput,
+} from './executeAutomationPreset';
+
 export { inputPinSchema, executeInputPin } from './inputPin';
 export type { InputPinInput, InputPinOutput } from './inputPin';
 
