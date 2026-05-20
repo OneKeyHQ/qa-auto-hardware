@@ -23,6 +23,35 @@ interface MnemonicOcrRequestPayload {
   requireBip39?: boolean;
 }
 
+interface RendererSequenceExecutionRequestPayload {
+  sequenceId: string;
+  armState: {
+    isConnected: boolean;
+    resourceHandle: number;
+    serverIP: string;
+    currentX?: number;
+    currentY?: number;
+    zDepth?: number;
+  };
+}
+
+interface RendererSequenceExecutionResponsePayload {
+  success: boolean;
+  message: string;
+  sequenceId: string;
+  sequenceName?: string;
+  stepsCompleted: number;
+  totalSteps: number;
+  mnemonicState?: {
+    words: string[];
+    shares?: string[][];
+    shareCount?: number;
+    threshold?: number;
+    walletType?: 'bip39' | 'slip39';
+    flowType?: 'create' | 'import';
+  };
+}
+
 interface VerifyOcrPayload {
   success: boolean;
   wordIndex: number;
@@ -104,6 +133,12 @@ interface Window {
     sendCapturePreOcrResponse: (payload: string | null) => void;
     onMcpOcrRequest: (callback: (payload?: MnemonicOcrRequestPayload | null) => void) => () => void;
     sendMcpOcrResponse: (payload: MnemonicOcrPayload | null) => void;
+    onMcpExecuteSequenceRequest: (
+      callback: (payload: RendererSequenceExecutionRequestPayload) => void
+    ) => () => void;
+    sendMcpExecuteSequenceResponse: (
+      payload: RendererSequenceExecutionResponsePayload | null
+    ) => void;
     onMcpVerifyOcrRequest: (callback: () => void) => () => void;
     sendMcpVerifyOcrResponse: (payload: VerifyOcrPayload | null) => void;
     saveCaptureToDownloads: (dataUrlOrBase64: string, hint: string) => Promise<string>;

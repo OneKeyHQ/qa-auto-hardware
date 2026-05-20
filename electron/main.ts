@@ -7,6 +7,7 @@ import {
   setMcpLogCallback,
   setPreOcrCaptureCallback,
   setMnemonicOcrCallback,
+  setRendererSequenceExecutionCallback,
   setVerifyOcrCallback,
   getArmState,
   updateArmState,
@@ -17,6 +18,7 @@ import {
   type ArmState,
   type MnemonicOcrResult,
   type MnemonicOcrRequest,
+  type RendererSequenceExecutionResult,
   type VerifyOcrResult,
 } from './mcp/state';
 import { saveCaptureToDownloads } from './saveCapture';
@@ -44,11 +46,25 @@ let pendingFrameResolve: ((frame: string | null) => void) | null = null;
 let pendingPreOcrResolve: ((payload: string | null) => void) | null = null;
 let pendingMnemonicOcrResolve: ((payload: MnemonicOcrResult | null) => void) | null = null;
 let pendingVerifyOcrResolve: ((payload: VerifyOcrResult | null) => void) | null = null;
+let pendingRendererSequenceResolve: ((payload: RendererSequenceExecutionResult | null) => void) | null =
+  null;
 let armDisconnectInFlight: Promise<void> | null = null;
 let hasCompletedArmCleanupBeforeQuit = false;
 
 /** Use bracket notation to avoid vite:define plugin transformation */
 const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL'];
+
+interface RendererSequenceExecutionRequestPayload {
+  sequenceId: string;
+  armState: {
+    isConnected: boolean;
+    resourceHandle: number;
+    serverIP: string;
+    currentX?: number;
+    currentY?: number;
+    zDepth?: number;
+  };
+}
 
 /**
  * Creates the main application window.
@@ -348,6 +364,44 @@ async function runMnemonicOcrFromRenderer(
   });
 }
 
+async function runSequenceInRenderer(
+  sequenceId: string
+): Promise<RendererSequenceExecutionResult | null> {
+  if (!mainWindow) {
+    console.warn('Cannot run sequence in renderer: mainWindow is null');
+    return null;
+  }
+
+  const armState = getArmState();
+  const payload: RendererSequenceExecutionRequestPayload = {
+    sequenceId,
+    armState: {
+      isConnected: armState.isConnected,
+      resourceHandle: armState.resourceHandle,
+      serverIP: armState.serverIP,
+      currentX: armState.currentX,
+      currentY: armState.currentY,
+      zDepth: armState.zDepth,
+    },
+  };
+
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      console.warn(`Timed out waiting for renderer sequence response: ${sequenceId}`);
+      pendingRendererSequenceResolve = null;
+      resolve(null);
+    }, 5 * 60 * 1000);
+
+    pendingRendererSequenceResolve = (result: RendererSequenceExecutionResult | null) => {
+      clearTimeout(timeout);
+      pendingRendererSequenceResolve = null;
+      resolve(result);
+    };
+
+    mainWindow.webContents.send('mcp-execute-sequence-request', payload);
+  });
+}
+
 async function runVerifyOcrFromRenderer(): Promise<VerifyOcrResult | null> {
   if (!mainWindow) {
     console.warn('Cannot run verify OCR: mainWindow is null');
@@ -392,6 +446,7 @@ async function startMcpServer(): Promise<void> {
   setFrameCaptureCallback(captureFrameFromRenderer);
   setPreOcrCaptureCallback(getPreOcrImageFromRenderer);
   setMnemonicOcrCallback(runMnemonicOcrFromRenderer);
+  setRendererSequenceExecutionCallback(runSequenceInRenderer);
   setVerifyOcrCallback(runVerifyOcrFromRenderer);
 
   // Set up MCP log callback to forward logs to renderer
@@ -607,6 +662,15 @@ ipcMain.on('mcp-ocr-response', (_event, payload: MnemonicOcrResult | null) => {
     pendingMnemonicOcrResolve(payload);
   }
 });
+
+ipcMain.on(
+  'mcp-execute-sequence-response',
+  (_event, payload: RendererSequenceExecutionResult | null) => {
+    if (pendingRendererSequenceResolve) {
+      pendingRendererSequenceResolve(payload);
+    }
+  }
+);
 
 ipcMain.on('mcp-verify-ocr-response', (_event, payload: VerifyOcrResult | null) => {
   if (pendingVerifyOcrResolve) {

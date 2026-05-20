@@ -213,14 +213,6 @@ export function generateSlip39ShareSteps(shares: string[][]): AutoStep[] {
         y: DEVICE_BUTTONS.confirm.y,
         depth: 12,
         delayBefore: 5000,
-        delayAfter: 3000,
-      });
-      steps.push({
-        label: `Share${shareIndex + 1}:start-next`,
-        x: DEVICE_BUTTONS.confirm.x,
-        y: DEVICE_BUTTONS.confirm.y,
-        depth: 12,
-        delayBefore: 1500,
         delayAfter: 5000,
       });
     }
@@ -499,15 +491,16 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     group: '创建钱包',
     steps: [
       {
+        // Use a larger, slower swipe so the second OCR pass reliably reveals words 9/10 and 19/20.
         label: 'SLIP39助记词页上滑15(慢速)',
         x: 50,
         y: 78,
         depth: 12,
-        swipeTo: { x: 50, y: 63 },
+        swipeTo: { x: 50, y: 50 },
         swipeSegments: 12,
         swipeSegmentDelay: 110,
         swipeHoldDelay: 420,
-        delayAfter: 2200,
+        delayAfter: 2600,
       },
     ],
   },

@@ -20,6 +20,7 @@ import {
   ARM_CONFIG,
   shouldStopSequenceExecution,
   setStopSequenceFlag,
+  runSequenceInRenderer,
 } from '../state';
 import { getSequence, getPageAction, getAllSequenceIds } from '../sequences';
 import { resolvePageActionSteps } from '../sequenceResolver';
@@ -240,6 +241,51 @@ export async function executeExecuteSequence(
   // Reset stop flag at start
   setStopSequenceFlag(false);
   clearMnemonicWords();
+
+  const rendererResult = await runSequenceInRenderer(sequence.id);
+  if (rendererResult) {
+    if (rendererResult.mnemonicState?.words?.length) {
+      storeStructuredMnemonicState(
+        {
+          words: rendererResult.mnemonicState.words,
+          shares: rendererResult.mnemonicState.shares,
+          shareCount: rendererResult.mnemonicState.shareCount,
+          threshold: rendererResult.mnemonicState.threshold,
+          sequenceId: sequence.id,
+          walletType: rendererResult.mnemonicState.walletType,
+          flowType: rendererResult.mnemonicState.flowType,
+        },
+        'renderer-sequence-execution'
+      );
+    }
+
+    const needsCooldown = rendererResult.success && requiresPostSequenceCooldown(sequence);
+    if (needsCooldown) {
+      console.log(
+        `[execute-sequence] Cooling down for ${POST_WALLET_FLOW_COOLDOWN_MS}ms after ${sequence.id}`
+      );
+      await delay(POST_WALLET_FLOW_COOLDOWN_MS);
+    }
+
+    let frame: string | null = null;
+    if (input.returnFrame !== false) {
+      frame = await captureFrame();
+    }
+
+    return {
+      output: {
+        success: rendererResult.success,
+        message: needsCooldown
+          ? `${rendererResult.message} after ${POST_WALLET_FLOW_COOLDOWN_MS}ms cooldown`
+          : rendererResult.message,
+        sequenceId: sequence.id,
+        sequenceName: sequence.name,
+        stepsCompleted: rendererResult.stepsCompleted,
+        totalSteps: rendererResult.totalSteps,
+      },
+      frame,
+    };
+  }
 
   try {
     for (const { action, steps: actionSteps } of resolvedActions) {
