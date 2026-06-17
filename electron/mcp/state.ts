@@ -99,8 +99,28 @@ export interface VerifyOcrResult {
   reason?: string;
 }
 
+export interface RendererSequenceExecutionResult {
+  success: boolean;
+  message: string;
+  sequenceId: string;
+  sequenceName?: string;
+  stepsCompleted: number;
+  totalSteps: number;
+  mnemonicState?: {
+    words: string[];
+    shares?: string[][];
+    shareCount?: number;
+    threshold?: number;
+    walletType?: 'bip39' | 'slip39';
+    flowType?: 'create' | 'import';
+  };
+}
+
 type MnemonicOcrCallback = (request?: MnemonicOcrRequest) => Promise<MnemonicOcrResult | null>;
 type VerifyOcrCallback = () => Promise<VerifyOcrResult | null>;
+type RendererSequenceExecutionCallback = (
+  sequenceId: string
+) => Promise<RendererSequenceExecutionResult | null>;
 
 /** Frame capture function (set by main process when renderer is ready) */
 let frameCaptureCallback: FrameCaptureCallback | null = null;
@@ -109,6 +129,7 @@ let frameCaptureCallback: FrameCaptureCallback | null = null;
 let preOcrCaptureCallback: PreOcrCaptureCallback | null = null;
 let mnemonicOcrCallback: MnemonicOcrCallback | null = null;
 let verifyOcrCallback: VerifyOcrCallback | null = null;
+let rendererSequenceExecutionCallback: RendererSequenceExecutionCallback | null = null;
 
 /** MCP Log entry type */
 export interface McpLogEntry {
@@ -223,6 +244,22 @@ export async function runVerifyOcr(): Promise<VerifyOcrResult | null> {
     return null;
   }
   return verifyOcrCallback();
+}
+
+export function setRendererSequenceExecutionCallback(
+  callback: RendererSequenceExecutionCallback
+): void {
+  rendererSequenceExecutionCallback = callback;
+}
+
+export async function runSequenceInRenderer(
+  sequenceId: string
+): Promise<RendererSequenceExecutionResult | null> {
+  if (!rendererSequenceExecutionCallback) {
+    console.warn('Renderer sequence execution callback not set');
+    return null;
+  }
+  return rendererSequenceExecutionCallback(sequenceId);
 }
 
 /**

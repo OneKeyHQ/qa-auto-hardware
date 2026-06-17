@@ -89,6 +89,31 @@ interface SequenceVerifyOcrResult {
   reason?: string;
 }
 
+interface SequenceExecutionArmContext {
+  isConnected: boolean;
+  resourceHandle: number;
+  serverIP: string;
+}
+
+interface SequenceExecutionResult {
+  success: boolean;
+  message: string;
+  sequenceId: string;
+  sequenceName?: string;
+  stepsCompleted: number;
+  totalSteps: number;
+  mnemonicState?: {
+    words: string[];
+    shares?: string[][];
+    shareCount?: number;
+    threshold?: number;
+    walletType?: 'bip39' | 'slip39';
+    flowType?: 'create' | 'import';
+  };
+}
+
+const SEQUENCE_OCR_TIMEOUT_MS = 2 * 60 * 1000;
+
 function hasSwipeTarget(step: AutoStep): step is AutoStep & { swipeTo: { x: number; y: number } } {
   return step.swipeTo !== undefined;
 }
@@ -145,8 +170,11 @@ function ControlPanel() {
    * @returns Server response as string
    * @throws Error if request fails
    */
-  const sendCommand = useCallback(async (params: { duankou: string; hco: number; daima: string }): Promise<string> => {
-    const url = buildArmApiUrl(state.serverIP, params);
+  const sendCommandToServer = useCallback(async (
+    serverIP: string,
+    params: { duankou: string; hco: number; daima: string }
+  ): Promise<string> => {
+    const url = buildArmApiUrl(serverIP, params);
     console.log('[ControlPanel] sendCommand ->', { url, params });
     try {
       if (window.electronAPI?.httpRequest) {
@@ -162,7 +190,11 @@ function ControlPanel() {
       console.error('[ControlPanel] sendCommand failed:', { url, params, error: errorMessage });
       throw new Error(`Request failed: ${errorMessage}（请求地址：${url}）`);
     }
-  }, [state.serverIP]);
+  }, []);
+
+  const sendCommand = useCallback(async (params: { duankou: string; hco: number; daima: string }): Promise<string> => {
+    return sendCommandToServer(state.serverIP, params);
+  }, [sendCommandToServer, state.serverIP]);
 
   const delay = (ms: number): Promise<void> => new Promise<void>(resolve => setTimeout(resolve, ms));
 
@@ -512,199 +544,321 @@ function ControlPanel() {
    * Executes an auto operation sequence.
    * If sequenceId is provided, runs that sequence; otherwise uses the currently selected one.
    */
+  const runSequenceExecution = useCallback(
+    async (
+      targetId: string,
+      armContext: SequenceExecutionArmContext,
+      options?: { updateSelectedSequence?: boolean }
+    ): Promise<SequenceExecutionResult> => {
+      const sequence = OPERATION_SEQUENCES.find((s) => s.id === targetId);
+      if (!sequence) {
+        return {
+          success: false,
+          message: `Unknown sequence ID: ${targetId}`,
+          sequenceId: targetId,
+          stepsCompleted: 0,
+          totalSteps: 0,
+        };
+      }
+
+      if (options?.updateSelectedSequence) {
+        setState((prev) => ({ ...prev, selectedSequenceId: targetId }));
+      }
+
+      const steps = await resolveSequenceStepsForUi(sequence);
+      const totalVerifySteps = steps.filter((step) => !!step.ocrVerify).length;
+      let finishedVerifySteps = 0;
+      let stepsCompleted = 0;
+      let latestCapturedWords: string[] = [];
+      const capturedShares: string[][] = [];
+      const isSlip39Create = targetId.startsWith('create-slip39-');
+
+      autoOperationCancelledRef.current = false;
+      setState((prev) => ({
+        ...prev,
+        isAutoRunning: true,
+        autoProgress: 0,
+        autoTotalSteps: steps.length,
+        activeOperationKey: `sequence:${targetId}`,
+        error: null,
+        capturedWords: [],
+      }));
+      addLog('自动', `开始执行自动操作序列: ${sequence.name}`);
+
+      const send = async (daima: string) => {
+        await sendCommandToServer(armContext.serverIP, {
+          duankou: '0',
+          hco: armContext.resourceHandle,
+          daima,
+        });
+      };
+      const stepConfig = { clickDelay: ARM_CONTROLLER_CONFIG.clickDelay, zUp: ARM_CONTROLLER_CONFIG.zUp };
+
+      try {
+        for (let i = 0; i < steps.length; i++) {
+          if (autoOperationCancelledRef.current) {
+            addLog('自动', '操作已取消');
+            return {
+              success: false,
+              message: `Sequence "${sequence.name}" stopped by user at step ${stepsCompleted + 1}`,
+              sequenceId: targetId,
+              sequenceName: sequence.name,
+              stepsCompleted,
+              totalSteps: steps.length,
+            };
+          }
+
+          const step = steps[i];
+          setState((prev) => ({ ...prev, autoProgress: i + 1 }));
+
+          if (step.ocrVerify) {
+            const verifyRound = finishedVerifySteps + 1;
+            addLog('验证', `开始第 ${verifyRound}/${totalVerifySteps} 次确认题 OCR`);
+            await send(`X${step.x}Y${step.y}`);
+            addLog('自动', `${step.label} - 移动到 (${step.x},${step.y})，等待验证OCR...`);
+            await delay(1600);
+
+            const verifyResult = await Promise.race([
+              new Promise<SequenceVerifyOcrResult>((resolve) => {
+                const handler = (e: Event) => {
+                  window.removeEventListener('qa-auto-hw:verify-ocr-result', handler);
+                  resolve((e as CustomEvent).detail);
+                };
+                window.addEventListener('qa-auto-hw:verify-ocr-result', handler);
+                window.dispatchEvent(new CustomEvent('qa-auto-hw:trigger-verify-ocr'));
+              }),
+              new Promise<SequenceVerifyOcrResult>((resolve) =>
+                setTimeout(
+                  () =>
+                    resolve({
+                      success: false,
+                      optionIndex: -1,
+                      wordIndex: -1,
+                      correctWord: '',
+                      mnemonicWords: [],
+                      reason: 'Verify OCR timed out',
+                    }),
+                  SEQUENCE_OCR_TIMEOUT_MS
+                )
+              ),
+            ]);
+
+            if (!verifyResult.success) {
+              throw new Error(`验证OCR失败: ${verifyResult.reason || 'unknown reason'}`);
+            }
+            if (
+              verifyResult.optionIndex < 0 ||
+              verifyResult.optionIndex >= step.ocrVerify.options.length
+            ) {
+              throw new Error(
+                `验证OCR返回了无效选项索引 ${verifyResult.optionIndex} (可选范围: 0-${step.ocrVerify.options.length - 1})`
+              );
+            }
+
+            const option = step.ocrVerify.options[verifyResult.optionIndex];
+            addLog(
+              '验证',
+              `单词 #${verifyResult.wordIndex} -> ${verifyResult.correctWord.toUpperCase()} (选项${verifyResult.optionIndex + 1})`
+            );
+            if (Array.isArray(verifyResult.mnemonicWords) && verifyResult.mnemonicWords.length > 0) {
+              addLog(
+                '验证',
+                `助记词表: ${verifyResult.mnemonicWords.map((word, idx) => `${idx + 1}.${word}`).join(', ')}`
+              );
+            }
+            if (Array.isArray(verifyResult.rawOptions) && verifyResult.rawOptions.length > 0) {
+              addLog('验证', `OCR选项: ${verifyResult.rawOptions.join(', ')}`);
+            }
+            if (Array.isArray(verifyResult.matchedOptions) && verifyResult.matchedOptions.length > 0) {
+              addLog('验证', `匹配选项: ${verifyResult.matchedOptions.join(', ')}`);
+            }
+
+            await send(`X${option.x}Y${option.y}`);
+            await send(`Z${option.depth}`);
+            await delay(ARM_CONTROLLER_CONFIG.clickDelay);
+            await send(`Z${ARM_CONTROLLER_CONFIG.zUp}`);
+
+            finishedVerifySteps += 1;
+            addLog(
+              '验证',
+              `第 ${verifyRound}/${totalVerifySteps} 题已点击选项${verifyResult.optionIndex + 1} (${option.x},${option.y})`
+            );
+          } else if (step.ocrCapture) {
+            const ocrCaptureConfig = typeof step.ocrCapture === 'object' ? step.ocrCapture : {};
+            await send(`X${step.x}Y${step.y}`);
+            addLog('自动', `${step.label} - 移动到 (${step.x},${step.y})，等待OCR识别...`);
+            await delay(1600);
+
+            const ocrResult = await Promise.race([
+              new Promise<SequenceOcrResult>((resolve) => {
+                const handler = (e: Event) => {
+                  window.removeEventListener('qa-auto-hw:ocr-result', handler);
+                  resolve((e as CustomEvent).detail);
+                };
+                window.addEventListener('qa-auto-hw:ocr-result', handler);
+                window.dispatchEvent(
+                  new CustomEvent('qa-auto-hw:trigger-ocr', { detail: ocrCaptureConfig })
+                );
+              }),
+              new Promise<SequenceOcrResult>((resolve) =>
+                setTimeout(
+                  () =>
+                    resolve({
+                      success: false,
+                      words: [],
+                      reason: 'Mnemonic OCR timed out',
+                    }),
+                  SEQUENCE_OCR_TIMEOUT_MS
+                )
+              ),
+            ]);
+
+            latestCapturedWords = Array.isArray(ocrResult.words) ? ocrResult.words : [];
+            setState((prev) => ({ ...prev, capturedWords: latestCapturedWords }));
+            addLog(
+              'OCR',
+              `识别到 ${latestCapturedWords.filter((word) => !!word).length}/${latestCapturedWords.length} 个单词: ${latestCapturedWords.join(', ')}`
+            );
+
+            const allowPartial = !!ocrCaptureConfig.allowPartial;
+            const canContinueWithPartial = allowPartial && ocrResult.words.length > 0;
+            if ((!ocrResult.success && !canContinueWithPartial) || ocrResult.words.length === 0) {
+              throw new Error(`助记词OCR失败: ${ocrResult.reason || 'no words recognized'}`);
+            }
+
+            if (
+              isSlip39Create &&
+              step.label.includes('(20词-2)') &&
+              latestCapturedWords.filter((word) => !!word).length > 0
+            ) {
+              capturedShares.push([...latestCapturedWords]);
+              addLog('OCR', `已记录 SLIP39 share ${capturedShares.length}`);
+            }
+          } else if (hasSwipeTarget(step)) {
+            await executeSwipeStep(step, send, delay, stepConfig);
+            addLog('自动', `${step.label} (${step.x},${step.y}) → (${step.swipeTo.x},${step.swipeTo.y})`);
+          } else {
+            await executeClickStep(step, send, delay, stepConfig);
+            addLog('自动', `${step.label} (${step.x},${step.y})`);
+          }
+
+          stepsCompleted += 1;
+          await delay(step.delayAfter ?? 250);
+        }
+
+        addLog('自动', '自动操作序列完成');
+
+        const mnemonicState = isSlip39Create
+          ? {
+              words: capturedShares[capturedShares.length - 1] || latestCapturedWords,
+              shares: capturedShares,
+              shareCount: targetId.includes('single')
+                ? 1
+                : targetId.includes('2of2')
+                  ? 2
+                  : targetId.includes('8of8')
+                    ? 8
+                    : targetId.includes('16of2')
+                      ? 16
+                      : undefined,
+              threshold: targetId.includes('single')
+                ? 1
+                : targetId.includes('2of2')
+                  ? 2
+                  : targetId.includes('8of8')
+                    ? 8
+                    : targetId.includes('16of2')
+                      ? 2
+                      : undefined,
+              walletType: 'slip39' as const,
+              flowType: 'create' as const,
+            }
+          : targetId.startsWith('create-wallet')
+            ? {
+                words: latestCapturedWords,
+                walletType: 'bip39' as const,
+                flowType: 'create' as const,
+              }
+            : undefined;
+
+        return {
+          success: true,
+          message: `Sequence "${sequence.name}" completed successfully`,
+          sequenceId: targetId,
+          sequenceName: sequence.name,
+          stepsCompleted,
+          totalSteps: steps.length,
+          mnemonicState,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Auto operation failed';
+        addLog('错误', `自动操作失败: ${message}`);
+        setState((prev) => ({
+          ...prev,
+          error: message,
+        }));
+        return {
+          success: false,
+          message: `Sequence execution failed at step ${stepsCompleted + 1}: ${message}`,
+          sequenceId: targetId,
+          sequenceName: sequence.name,
+          stepsCompleted,
+          totalSteps: steps.length,
+        };
+      } finally {
+        setState((prev) => ({
+          ...prev,
+          isAutoRunning: false,
+          autoProgress: 0,
+          autoTotalSteps: 0,
+          activeOperationKey: '',
+        }));
+      }
+    },
+    [addLog, resolveSequenceStepsForUi, sendCommandToServer]
+  );
+
   const handleAutoOperation = useCallback(async (sequenceId?: string) => {
     if (state.isLoading || !state.isConnected || !state.isReady || state.isAutoRunning) return;
 
     const targetId = sequenceId || state.selectedSequenceId;
-    const sequence = OPERATION_SEQUENCES.find(s => s.id === targetId);
-    if (!sequence) return;
+    await runSequenceExecution(targetId, {
+      isConnected: state.isConnected,
+      resourceHandle: state.resourceHandle,
+      serverIP: state.serverIP,
+    }, { updateSelectedSequence: !!sequenceId });
+  }, [
+    runSequenceExecution,
+    state.isAutoRunning,
+    state.isConnected,
+    state.isLoading,
+    state.isReady,
+    state.resourceHandle,
+    state.selectedSequenceId,
+    state.serverIP,
+  ]);
 
-    // Update selected sequence ID to match what we're running
-    if (sequenceId) {
-      setState(prev => ({ ...prev, selectedSequenceId: targetId }));
+  useEffect(() => {
+    if (!window.electronAPI?.onMcpExecuteSequenceRequest) {
+      return undefined;
     }
 
-    const steps = await resolveSequenceStepsForUi(sequence);
-    const totalVerifySteps = steps.filter((step) => !!step.ocrVerify).length;
-    let finishedVerifySteps = 0;
-
-    autoOperationCancelledRef.current = false;
-    setState(prev => ({
-      ...prev,
-      isAutoRunning: true,
-      autoProgress: 0,
-      autoTotalSteps: steps.length,
-      activeOperationKey: `sequence:${targetId}`,
-      error: null,
-      capturedWords: [],
-    }));
-    addLog('自动', `开始执行自动操作序列: ${sequence.name}`);
-
-    // Shared send helper and config for the step executor utilities
-    const send = async (daima: string) => {
-      await sendCommand({ duankou: '0', hco: state.resourceHandle, daima });
-    };
-    const stepConfig = { clickDelay: ARM_CONTROLLER_CONFIG.clickDelay, zUp: ARM_CONTROLLER_CONFIG.zUp };
-
-    try {
-      for (let i = 0; i < steps.length; i++) {
-        // Check if operation was cancelled
-        if (autoOperationCancelledRef.current) {
-          addLog('自动', '操作已取消');
-          break;
-        }
-
-        const step = steps[i];
-        setState(prev => ({ ...prev, autoProgress: i + 1 }));
-
-        if (step.ocrVerify) {
-          const verifyRound = finishedVerifySteps + 1;
-          addLog('验证', `开始第 ${verifyRound}/${totalVerifySteps} 次确认题 OCR`);
-
-          // Verification OCR step: move arm, OCR to detect word index, click correct option
-          await send(`X${step.x}Y${step.y}`);
-
-          addLog('自动', `${step.label} - 移动到 (${step.x},${step.y})，等待验证OCR...`);
-
-          // Give the camera feed time to settle before verification OCR.
-          await delay(1600);
-
-          // Trigger verification OCR and wait for result (with 45s timeout)
-          const verifyResult = await Promise.race([
-            new Promise<SequenceVerifyOcrResult>((resolve) => {
-              const handler = (e: Event) => {
-                window.removeEventListener('qa-auto-hw:verify-ocr-result', handler);
-                resolve((e as CustomEvent).detail);
-              };
-              window.addEventListener('qa-auto-hw:verify-ocr-result', handler);
-              window.dispatchEvent(new CustomEvent('qa-auto-hw:trigger-verify-ocr'));
-            }),
-            new Promise<SequenceVerifyOcrResult>((resolve) =>
-              setTimeout(
-                () => resolve({
-                  success: false,
-                  optionIndex: -1,
-                  wordIndex: -1,
-                  correctWord: '',
-                  mnemonicWords: [],
-                  reason: 'Verify OCR timed out',
-                }),
-                45000
-              )
-            ),
-          ]);
-
-          if (!verifyResult.success) {
-            throw new Error(`验证OCR失败: ${verifyResult.reason || 'unknown reason'}`);
-          }
-          if (
-            verifyResult.optionIndex < 0
-            || verifyResult.optionIndex >= step.ocrVerify.options.length
-          ) {
-            throw new Error(
-              `验证OCR返回了无效选项索引 ${verifyResult.optionIndex} (可选范围: 0-${step.ocrVerify.options.length - 1})`
-            );
-          }
-
-          const option = step.ocrVerify.options[verifyResult.optionIndex];
-          addLog('验证', `单词 #${verifyResult.wordIndex} -> ${verifyResult.correctWord.toUpperCase()} (选项${verifyResult.optionIndex + 1})`);
-          if (Array.isArray(verifyResult.mnemonicWords) && verifyResult.mnemonicWords.length > 0) {
-            addLog(
-              '验证',
-              `助记词表: ${verifyResult.mnemonicWords.map((word, idx) => `${idx + 1}.${word}`).join(', ')}`
-            );
-          }
-          if (Array.isArray(verifyResult.rawOptions) && verifyResult.rawOptions.length > 0) {
-            addLog('验证', `OCR选项: ${verifyResult.rawOptions.join(', ')}`);
-          }
-          if (Array.isArray(verifyResult.matchedOptions) && verifyResult.matchedOptions.length > 0) {
-            addLog('验证', `匹配选项: ${verifyResult.matchedOptions.join(', ')}`);
-          }
-
-          // Click the correct option using shared step logic
-          await send(`X${option.x}Y${option.y}`);
-          await send(`Z${option.depth}`);
-          await delay(ARM_CONTROLLER_CONFIG.clickDelay);
-          await send(`Z${ARM_CONTROLLER_CONFIG.zUp}`);
-
-          finishedVerifySteps += 1;
-          addLog('验证', `第 ${verifyRound}/${totalVerifySteps} 题已点击选项${verifyResult.optionIndex + 1} (${option.x},${option.y})`);
-        } else if (step.ocrCapture) {
-          const ocrCaptureConfig = typeof step.ocrCapture === 'object' ? step.ocrCapture : {};
-          // OCR capture step: move arm out of the way (no click), then trigger OCR
-          await send(`X${step.x}Y${step.y}`);
-
-          addLog('自动', `${step.label} - 移动到 (${step.x},${step.y})，等待OCR识别...`);
-
-          // Give the camera feed time to settle before mnemonic OCR.
-          await delay(1600);
-
-          // Trigger OCR and wait for result (with 45s timeout)
-          const ocrResult = await Promise.race([
-            new Promise<SequenceOcrResult>((resolve) => {
-              const handler = (e: Event) => {
-                window.removeEventListener('qa-auto-hw:ocr-result', handler);
-                resolve((e as CustomEvent).detail);
-              };
-              window.addEventListener('qa-auto-hw:ocr-result', handler);
-              window.dispatchEvent(
-                new CustomEvent('qa-auto-hw:trigger-ocr', { detail: ocrCaptureConfig })
-              );
-            }),
-            new Promise<SequenceOcrResult>((resolve) =>
-              setTimeout(
-                () => resolve({
-                  success: false,
-                  words: [],
-                  reason: 'Mnemonic OCR timed out',
-                }),
-                45000
-              )
-            ),
-          ]);
-
-          const latestWords = Array.isArray(ocrResult.words) ? ocrResult.words : [];
-          setState(prev => ({ ...prev, capturedWords: latestWords }));
-          addLog('OCR', `识别到 ${latestWords.filter((word) => !!word).length}/${latestWords.length} 个单词: ${latestWords.join(', ')}`);
-
-          const allowPartial = !!ocrCaptureConfig.allowPartial;
-          const canContinueWithPartial = allowPartial && ocrResult.words.length > 0;
-          if ((!ocrResult.success && !canContinueWithPartial) || ocrResult.words.length === 0) {
-            throw new Error(`助记词OCR失败: ${ocrResult.reason || 'no words recognized'}`);
-          }
-        } else if (hasSwipeTarget(step)) {
-          // Swipe: shared utility (consistent with MCP)
-          await executeSwipeStep(step, send, delay, stepConfig);
-          addLog('自动', `${step.label} (${step.x},${step.y}) → (${step.swipeTo.x},${step.swipeTo.y})`);
-        } else {
-          // Click: shared utility (consistent with MCP)
-          await executeClickStep(step, send, delay, stepConfig);
-          addLog('自动', `${step.label} (${step.x},${step.y})`);
-        }
-
-        // Wait before next step (use custom delay or default 100ms for faster execution)
-        await delay(step.delayAfter ?? 250);
+    return window.electronAPI.onMcpExecuteSequenceRequest(async (payload) => {
+      if (state.isAutoRunning) {
+        window.electronAPI?.sendMcpExecuteSequenceResponse?.({
+          success: false,
+          message: 'Renderer sequence execution is already running',
+          sequenceId: payload.sequenceId,
+          stepsCompleted: 0,
+          totalSteps: 0,
+        });
+        return;
       }
 
-      if (!autoOperationCancelledRef.current) {
-        addLog('自动', '自动操作序列完成');
-      }
-    } catch (error) {
-      addLog('错误', `自动操作失败: ${error instanceof Error ? error.message : 'Unknown'}`);
-      setState(prev => ({
-        ...prev,
-        error: error instanceof Error ? error.message : 'Auto operation failed',
-      }));
-    } finally {
-      setState(prev => ({
-        ...prev,
-        isAutoRunning: false,
-        autoProgress: 0,
-        autoTotalSteps: 0,
-        activeOperationKey: '',
-      }));
-    }
-  }, [addLog, resolveSequenceStepsForUi, sendCommand, state.isAutoRunning, state.isConnected, state.isLoading, state.isReady, state.resourceHandle, state.selectedSequenceId]);
+      const result = await runSequenceExecution(payload.sequenceId, payload.armState);
+      window.electronAPI?.sendMcpExecuteSequenceResponse?.(result);
+    });
+  }, [runSequenceExecution, state.isAutoRunning]);
 
   const handleAutomationPresetRun = useCallback(async (
     suite: Exclude<AutomationPresetSuite, 'deviceSettings'>,

@@ -17,6 +17,35 @@ interface MnemonicOcrRequestPayload {
   requireBip39?: boolean;
 }
 
+interface RendererSequenceExecutionRequestPayload {
+  sequenceId: string;
+  armState: {
+    isConnected: boolean;
+    resourceHandle: number;
+    serverIP: string;
+    currentX?: number;
+    currentY?: number;
+    zDepth?: number;
+  };
+}
+
+interface RendererSequenceExecutionResponsePayload {
+  success: boolean;
+  message: string;
+  sequenceId: string;
+  sequenceName?: string;
+  stepsCompleted: number;
+  totalSteps: number;
+  mnemonicState?: {
+    words: string[];
+    shares?: string[][];
+    shareCount?: number;
+    threshold?: number;
+    walletType?: 'bip39' | 'slip39';
+    flowType?: 'create' | 'import';
+  };
+}
+
 interface VerifyOcrPayload {
   success: boolean;
   wordIndex: number;
@@ -155,6 +184,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.send('mcp-ocr-response', payload);
   },
 
+  onMcpExecuteSequenceRequest: (
+    callback: (payload: RendererSequenceExecutionRequestPayload) => void
+  ) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      payload: RendererSequenceExecutionRequestPayload
+    ) => callback(payload);
+    ipcRenderer.on('mcp-execute-sequence-request', handler);
+    return () => {
+      ipcRenderer.removeListener('mcp-execute-sequence-request', handler);
+    };
+  },
+
+  sendMcpExecuteSequenceResponse: (payload: RendererSequenceExecutionResponsePayload | null) => {
+    ipcRenderer.send('mcp-execute-sequence-response', payload);
+  },
+
   onMcpVerifyOcrRequest: (callback: () => void) => {
     const handler = () => callback();
     ipcRenderer.on('mcp-verify-ocr-request', handler);
@@ -258,6 +304,12 @@ declare global {
       sendCapturePreOcrResponse: (payload: string | null) => void;
       onMcpOcrRequest: (callback: (payload?: MnemonicOcrRequestPayload | null) => void) => () => void;
       sendMcpOcrResponse: (payload: MnemonicOcrPayload | null) => void;
+      onMcpExecuteSequenceRequest: (
+        callback: (payload: RendererSequenceExecutionRequestPayload) => void
+      ) => () => void;
+      sendMcpExecuteSequenceResponse: (
+        payload: RendererSequenceExecutionResponsePayload | null
+      ) => void;
       onMcpVerifyOcrRequest: (callback: () => void) => () => void;
       sendMcpVerifyOcrResponse: (payload: VerifyOcrPayload | null) => void;
       saveCaptureToDownloads: (dataUrlOrBase64: string, hint: string) => Promise<string>;
