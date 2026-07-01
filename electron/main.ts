@@ -22,7 +22,7 @@ import {
   type VerifyOcrResult,
 } from './mcp/state';
 import { saveCaptureToDownloads } from './saveCapture';
-import { resolveSequenceStepsById } from './mcp/sequenceResolver';
+import { resolveSequenceStepsByIdForDevice } from './mcp/sequenceSetResolver';
 
 /**
  * Build output directory structure:
@@ -54,8 +54,18 @@ let hasCompletedArmCleanupBeforeQuit = false;
 /** Use bracket notation to avoid vite:define plugin transformation */
 const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL'];
 
+const shouldUseSingleInstanceLock = !VITE_DEV_SERVER_URL;
+const gotSingleInstanceLock = shouldUseSingleInstanceLock
+  ? app.requestSingleInstanceLock()
+  : true;
+
+if (shouldUseSingleInstanceLock && !gotSingleInstanceLock) {
+  app.quit();
+}
+
 interface RendererSequenceExecutionRequestPayload {
   sequenceId: string;
+  deviceTestSetId?: string;
   armState: {
     isConnected: boolean;
     resourceHandle: number;
@@ -365,7 +375,8 @@ async function runMnemonicOcrFromRenderer(
 }
 
 async function runSequenceInRenderer(
-  sequenceId: string
+  sequenceId: string,
+  deviceTestSetId?: string
 ): Promise<RendererSequenceExecutionResult | null> {
   if (!mainWindow) {
     console.warn('Cannot run sequence in renderer: mainWindow is null');
@@ -375,6 +386,7 @@ async function runSequenceInRenderer(
   const armState = getArmState();
   const payload: RendererSequenceExecutionRequestPayload = {
     sequenceId,
+    deviceTestSetId,
     armState: {
       isConnected: armState.isConnected,
       resourceHandle: armState.resourceHandle,
@@ -468,7 +480,24 @@ async function startMcpServer(): Promise<void> {
  * Starts MCP Server for Claude/Cursor integration.
  * On macOS, recreates window when dock icon is clicked with no windows open.
  */
+if (shouldUseSingleInstanceLock && gotSingleInstanceLock) {
+  app.on('second-instance', () => {
+    if (!mainWindow) {
+      return;
+    }
+
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore();
+    }
+    mainWindow.focus();
+  });
+}
+
 app.whenReady().then(async () => {
+  if (!gotSingleInstanceLock) {
+    return;
+  }
+
   createWindow();
 
   // Start MCP Server after window is created
@@ -495,7 +524,17 @@ app.on('window-all-closed', () => {
 
 /** Clean up MCP Server before quitting */
 app.on('before-quit', (event) => {
+  if (shouldUseSingleInstanceLock && !gotSingleInstanceLock) {
+    return;
+  }
+
   if (hasCompletedArmCleanupBeforeQuit) {
+    return;
+  }
+
+  const armState = getArmState();
+  if (!armState.isConnected || armState.resourceHandle <= 0) {
+    resetArmState();
     return;
   }
 
@@ -536,8 +575,8 @@ ipcMain.handle('http-request', async (_event, url: string) => {
   return performNetRequest(url, 'renderer-http-request');
 });
 
-ipcMain.handle('resolve-sequence-steps', async (_event, sequenceId: string) => {
-  return resolveSequenceStepsById(sequenceId);
+ipcMain.handle('resolve-sequence-steps', async (_event, sequenceId: string, deviceTestSetId?: string) => {
+  return resolveSequenceStepsByIdForDevice(sequenceId, deviceTestSetId);
 });
 
 ipcMain.handle(
@@ -637,6 +676,7 @@ ipcMain.handle(
       imageDataUrl: string;
       layoutHint?: 'mnemonic' | 'verify-options' | 'verify-number' | 'generic';
       expectedWordCount?: number;
+      recVariantCount?: number;
     }
   ) => runPaddleOcrEn(payload)
 );

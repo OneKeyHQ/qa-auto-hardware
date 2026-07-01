@@ -79,6 +79,12 @@ CPU_THREADS = read_int_env(
   minimum=1,
   maximum=32,
 )
+REC_VARIANT_COUNT = read_int_env(
+  "QA_AUTO_HW_OCR_REC_VARIANTS",
+  default=1,
+  minimum=1,
+  maximum=4,
+)
 
 
 try:
@@ -257,6 +263,52 @@ def preprocess_rec_input(crop_bgr: np.ndarray) -> np.ndarray:
   return canvas.transpose(2, 0, 1)[None, :]
 
 
+def build_rec_crop_variants(crop_bgr: np.ndarray, variant_count: int = REC_VARIANT_COUNT) -> List[np.ndarray]:
+  variants = [crop_bgr]
+  safe_variant_count = max(1, min(4, int(variant_count)))
+  if safe_variant_count <= 1 or crop_bgr.size == 0:
+    return variants
+
+  # Light sharpening helps cyan/white OLED text that is slightly bloomed by the camera.
+  blurred = cv2.GaussianBlur(crop_bgr, (0, 0), 1.0)
+  sharpened = cv2.addWeighted(crop_bgr, 1.55, blurred, -0.55, 0)
+  variants.append(sharpened)
+  if safe_variant_count <= 2:
+    return variants
+
+  # Local contrast on luminance keeps text strokes stronger without changing geometry.
+  lab = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2LAB)
+  l_channel, a_channel, b_channel = cv2.split(lab)
+  clahe = cv2.createCLAHE(clipLimit=2.2, tileGridSize=(4, 4))
+  contrast_l = clahe.apply(l_channel)
+  contrast = cv2.cvtColor(cv2.merge((contrast_l, a_channel, b_channel)), cv2.COLOR_LAB2BGR)
+  variants.append(contrast)
+  if safe_variant_count <= 3:
+    return variants
+
+  # High-contrast binary fallback for very clear bright text on dark screen.
+  gray = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2GRAY)
+  _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+  variants.append(cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR))
+  return variants
+
+
+def score_rec_text(text: str, conf: float) -> float:
+  token = extract_alpha_token(text)
+  score = conf
+  if 3 <= len(token) <= 8:
+    score += 0.08
+  elif token:
+    score -= 0.08
+  else:
+    score -= 0.25
+
+  alpha_tokens = re.findall(r"[A-Za-z]+", text)
+  if len(alpha_tokens) > 1:
+    score -= 0.04 * (len(alpha_tokens) - 1)
+  return score
+
+
 def decode_ctc(logits: np.ndarray, charset: Sequence[str]) -> Tuple[str, float]:
   idxs = logits.argmax(axis=1)
   confs = logits.max(axis=1)
@@ -292,6 +344,7 @@ def recognize_crop(
   input_handle: Any,
   output_handle: Any,
   charset: Sequence[str],
+  variant_count: int = REC_VARIANT_COUNT,
 ) -> Tuple[str, float]:
   x, y, w, h = box
   h_img, w_img = image_bgr.shape[:2]
@@ -300,12 +353,24 @@ def recognize_crop(
   x2 = min(w_img, x + w + CROP_PAD_X_RIGHT)
   y2 = min(h_img, y + h + CROP_PAD_Y)
   crop = image_bgr[y1:y2, x1:x2]
-  arr = preprocess_rec_input(crop)
-  input_handle.reshape(arr.shape)
-  input_handle.copy_from_cpu(arr)
-  predictor.run()
-  out = output_handle.copy_to_cpu()[0]
-  return decode_ctc(out, charset)
+  best_text = ""
+  best_conf = 0.0
+  best_score = float("-inf")
+
+  for variant in build_rec_crop_variants(crop, variant_count):
+    arr = preprocess_rec_input(variant)
+    input_handle.reshape(arr.shape)
+    input_handle.copy_from_cpu(arr)
+    predictor.run()
+    out = output_handle.copy_to_cpu()[0]
+    text, conf = decode_ctc(out, charset)
+    score = score_rec_text(text, conf)
+    if score > best_score:
+      best_text = text
+      best_conf = conf
+      best_score = score
+
+  return best_text, best_conf
 
 
 def extract_alpha_token(text: str) -> str:
@@ -565,6 +630,7 @@ def recognize_mnemonic_grid(
   output_handle: Any,
   charset: Sequence[str],
   num_rows: int = 6,
+  variant_count: int = REC_VARIANT_COUNT,
 ) -> Optional[Tuple[str, float]]:
   """Recognize a 2-column mnemonic grid with `num_rows` rows (num_rows*2 words total).
 
@@ -592,10 +658,10 @@ def recognize_mnemonic_grid(
       return None
 
     left_text, left_conf = recognize_crop(
-      image_bgr, left_box, predictor, input_handle, output_handle, charset
+      image_bgr, left_box, predictor, input_handle, output_handle, charset, variant_count
     )
     right_text, right_conf = recognize_crop(
-      image_bgr, right_box, predictor, input_handle, output_handle, charset
+      image_bgr, right_box, predictor, input_handle, output_handle, charset, variant_count
     )
 
     left_token = extract_alpha_token(left_text)
@@ -624,6 +690,7 @@ def recognize_generic_lines(
   input_handle: Any,
   output_handle: Any,
   charset: Sequence[str],
+  variant_count: int = REC_VARIANT_COUNT,
 ) -> Tuple[str, float]:
   lines: List[str] = []
   confs: List[float] = []
@@ -632,7 +699,7 @@ def recognize_generic_lines(
     if box is None:
       continue
     text, conf = recognize_crop(
-      image_bgr, box, predictor, input_handle, output_handle, charset
+      image_bgr, box, predictor, input_handle, output_handle, charset, variant_count
     )
     if text.strip():
       lines.append(text.strip())
@@ -642,7 +709,7 @@ def recognize_generic_lines(
     # Last fallback: recognize the whole image as one line.
     h, w = image_bgr.shape[:2]
     text, conf = recognize_crop(
-      image_bgr, (0, 0, w, h), predictor, input_handle, output_handle, charset
+      image_bgr, (0, 0, w, h), predictor, input_handle, output_handle, charset, variant_count
     )
     return text.strip(), conf * 100.0
 
@@ -670,6 +737,11 @@ def infer_once(payload: Dict[str, Any]) -> Dict[str, Any]:
     expected_word_count = 0
   if expected_word_count not in {12, 18, 20, 24}:
     expected_word_count = 0
+  try:
+    rec_variant_count = int(payload.get("recVariantCount") or REC_VARIANT_COUNT)
+  except (TypeError, ValueError):
+    rec_variant_count = REC_VARIANT_COUNT
+  rec_variant_count = max(1, min(4, rec_variant_count))
   verify_max_index = expected_word_count if expected_word_count in {12, 18, 20, 24} else 12
 
   if layout_hint in {"verify-number", "verify_number"}:
@@ -695,7 +767,7 @@ def infer_once(payload: Dict[str, Any]) -> Dict[str, Any]:
       boxes = detect_text_boxes(image_bgr, mask_top_ratio=0.0, mask_bottom_ratio=1.0)
       rows = cluster_rows(boxes, image_bgr.shape[0])
       text, confidence = recognize_generic_lines(
-        image_bgr, rows, predictor, input_handle, output_handle, charset
+        image_bgr, rows, predictor, input_handle, output_handle, charset, rec_variant_count
       )
       detected_index = parse_word_index_from_text(text, verify_max_index)
       if detected_index != -1 and f"#{detected_index}" not in text:
@@ -716,8 +788,9 @@ def infer_once(payload: Dict[str, Any]) -> Dict[str, Any]:
 
   predictor, input_handle, output_handle, charset = ensure_rec_model(resolve_en_model_dir())
   mnemonic_layout = layout_hint in {"mnemonic", "mnemonic-grid", "mnemonic_words"}
-  # For mnemonic pages, keep full vertical content (18/24 need top and bottom indices).
-  use_full_vertical_mask = mnemonic_layout or expected_word_count >= 18
+  verify_options_layout = layout_hint in {"verify-options", "verify_options"}
+  # Mnemonic and verify-option crops are already tight; keep full vertical content.
+  use_full_vertical_mask = mnemonic_layout or verify_options_layout or expected_word_count >= 18
   boxes = detect_text_boxes(
     image_bgr,
     mask_top_ratio=0.0 if use_full_vertical_mask else 0.14,
@@ -735,13 +808,17 @@ def infer_once(payload: Dict[str, Any]) -> Dict[str, Any]:
       # Known word count: try the exact grid layout.
       num_rows = MNEMONIC_GRID_WORD_COUNTS[expected_word_count]
       mnemonic_result = recognize_mnemonic_grid(
-        image_bgr, rows, predictor, input_handle, output_handle, charset, num_rows=num_rows
+        image_bgr, rows, predictor, input_handle, output_handle, charset,
+        num_rows=num_rows,
+        variant_count=rec_variant_count,
       )
     else:
       # Unknown word count: try all supported layouts in ascending order.
       for num_rows in sorted(MNEMONIC_GRID_WORD_COUNTS.values()):
         mnemonic_result = recognize_mnemonic_grid(
-          image_bgr, rows, predictor, input_handle, output_handle, charset, num_rows=num_rows
+          image_bgr, rows, predictor, input_handle, output_handle, charset,
+          num_rows=num_rows,
+          variant_count=rec_variant_count,
         )
         if mnemonic_result is not None:
           break
@@ -763,6 +840,7 @@ def infer_once(payload: Dict[str, Any]) -> Dict[str, Any]:
       retry_result = recognize_mnemonic_grid(
         image_bgr, retry_rows, predictor, input_handle, output_handle, charset,
         num_rows=retry_num_rows,
+        variant_count=rec_variant_count,
       )
       if retry_result is not None:
         boxes = retry_boxes
@@ -777,7 +855,7 @@ def infer_once(payload: Dict[str, Any]) -> Dict[str, Any]:
     mode = "mnemonic-grid"
   else:
     text, confidence = recognize_generic_lines(
-      image_bgr, rows, predictor, input_handle, output_handle, charset
+      image_bgr, rows, predictor, input_handle, output_handle, charset, rec_variant_count
     )
 
   return {
@@ -790,6 +868,7 @@ def infer_once(payload: Dict[str, Any]) -> Dict[str, Any]:
     "mode": mode,
     "boxCount": len(boxes),
     "rowCount": len(rows),
+    "recVariantCount": rec_variant_count,
   }
 
 

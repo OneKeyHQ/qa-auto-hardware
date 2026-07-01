@@ -13,14 +13,21 @@ import './ControlPanel.css';
  * Both QA Auto Hardware UI and MCP tools use the same sequence definitions.
  */
 import {
-  getAllSequenceIds,
-  getSequence,
-  getFullSteps,
-  getAllCategories,
-  getSequencesByCategory,
   type AutoSequence,
   type AutoStep,
 } from '../../electron/mcp/sequences';
+import {
+  DEFAULT_DEVICE_TEST_SET_ID,
+  DEVICE_TEST_SETS,
+  getAllCategories,
+  getDeviceHomeCoord,
+  getAllSequenceIds,
+  getFullSteps,
+  getSequence,
+  getSequencesByCategory,
+  type DeviceTestSetId,
+} from '../../electron/mcp/sequenceSets';
+import { DEVICE_OCR_SCENES } from '../ocr/deviceScenes';
 import { executeClickStep, executeSwipeStep } from '../../electron/mcp/utils/executeStep';
 import {
   getAutomationPresetEntries,
@@ -28,14 +35,15 @@ import {
   type AutomationPresetSuite,
 } from '../../electron/mcp/automationActionPresets';
 import { executeDeviceActionSequence } from '../../electron/mcp/deviceActionRuntime';
+import { getStoredDeviceTestSet, storeDeviceTestSet } from '../deviceTestSetPreference';
 
 // Get all sequences from the shared definition
-const OPERATION_SEQUENCES: AutoSequence[] = getAllSequenceIds()
-  .map((id: string) => getSequence(id))
+const DEFAULT_OPERATION_SEQUENCES: AutoSequence[] = getAllSequenceIds(DEFAULT_DEVICE_TEST_SET_ID)
+  .map((id: string) => getSequence(id, DEFAULT_DEVICE_TEST_SET_ID))
   .filter((seq): seq is AutoSequence => seq !== undefined);
 
 // Get all categories for the sequence panel
-const SEQUENCE_CATEGORIES = getAllCategories();
+const DEFAULT_SEQUENCE_CATEGORIES = getAllCategories(DEFAULT_DEVICE_TEST_SET_ID);
 const SECURITY_CHECK_PRESETS = getAutomationPresetEntries('securityCheck');
 const CHAIN_METHOD_BATCH_PRESETS = getAutomationPresetEntries('chainMethodBatch');
 
@@ -57,6 +65,7 @@ interface ControlPanelState {
   activeOperationKey: string;
   selectedSequenceId: string;
   selectedCategory: string;
+  selectedDeviceTestSet: DeviceTestSetId;
   /** Words captured via OCR during create-wallet flow */
   capturedWords: string[];
 }
@@ -100,6 +109,7 @@ interface SequenceExecutionResult {
   message: string;
   sequenceId: string;
   sequenceName?: string;
+  deviceTestSetId?: string;
   stepsCompleted: number;
   totalSteps: number;
   mnemonicState?: {
@@ -119,31 +129,43 @@ function hasSwipeTarget(step: AutoStep): step is AutoStep & { swipeTo: { x: numb
 }
 
 function ControlPanel() {
-  const [state, setState] = useState<ControlPanelState>({
-    isConnected: false,
-    resourceHandle: 0,
-    serverIP: ARM_CONTROLLER_CONFIG.defaultServerIP,
-    comPort: ARM_CONTROLLER_CONFIG.defaultComPort,
-    stepSize: ARM_CONTROLLER_CONFIG.defaultStepSize,
-    zDepth: ARM_CONTROLLER_CONFIG.defaultZDepth,
-    currentX: 0,
-    currentY: 0,
-    isLoading: false,
-    isReady: false,
-    error: null,
-    isAutoRunning: false,
-    autoProgress: 0,
-    autoTotalSteps: 0,
-    activeOperationKey: '',
-    selectedSequenceId: OPERATION_SEQUENCES[0].id,
-    selectedCategory: SEQUENCE_CATEGORIES[0],
-    capturedWords: [],
+  const [state, setState] = useState<ControlPanelState>(() => {
+    const selectedDeviceTestSet = getStoredDeviceTestSet();
+    const sequenceCategories = getAllCategories(selectedDeviceTestSet);
+    const selectedCategory = sequenceCategories[0] ?? DEFAULT_SEQUENCE_CATEGORIES[0] ?? '';
+    const selectedSequence = getSequencesByCategory(selectedCategory, selectedDeviceTestSet)[0];
+
+    return {
+      isConnected: false,
+      resourceHandle: 0,
+      serverIP: ARM_CONTROLLER_CONFIG.defaultServerIP,
+      comPort: ARM_CONTROLLER_CONFIG.defaultComPort,
+      stepSize: ARM_CONTROLLER_CONFIG.defaultStepSize,
+      zDepth: ARM_CONTROLLER_CONFIG.defaultZDepth,
+      currentX: 0,
+      currentY: 0,
+      isLoading: false,
+      isReady: false,
+      error: null,
+      isAutoRunning: false,
+      autoProgress: 0,
+      autoTotalSteps: 0,
+      activeOperationKey: '',
+      selectedSequenceId: selectedSequence?.id ?? DEFAULT_OPERATION_SEQUENCES[0].id,
+      selectedCategory,
+      selectedDeviceTestSet,
+      capturedWords: [],
+    };
   });
 
   // Ref to track if auto operation should be cancelled
   const autoOperationCancelledRef = useRef(false);
 
   const [logs, setLogs] = useState<LogEntry[]>([]);
+
+  useEffect(() => {
+    storeDeviceTestSet(state.selectedDeviceTestSet);
+  }, [state.selectedDeviceTestSet]);
 
   const addLog = useCallback((action: string, detail: string) => {
     const now = new Date();
@@ -154,11 +176,14 @@ function ControlPanel() {
     ]);
   }, []);
 
-  const resolveSequenceStepsForUi = useCallback(async (sequence: AutoSequence): Promise<AutoStep[]> => {
+  const resolveSequenceStepsForUi = useCallback(async (
+    sequence: AutoSequence,
+    deviceTestSetId: DeviceTestSetId
+  ): Promise<AutoStep[]> => {
     if (window.electronAPI?.resolveSequenceSteps) {
-      return window.electronAPI.resolveSequenceSteps(sequence.id);
+      return window.electronAPI.resolveSequenceSteps(sequence.id, deviceTestSetId);
     }
-    return getFullSteps(sequence);
+    return getFullSteps(sequence, deviceTestSetId);
   }, []);
 
   /**
@@ -540,6 +565,46 @@ function ControlPanel() {
     }
   };
 
+  const handleResetPosition = async () => {
+    if (state.isLoading || !state.isConnected || !state.isReady || state.isAutoRunning) return;
+
+    const homeCoord = getDeviceHomeCoord(state.selectedDeviceTestSet);
+    setState(prev => ({ ...prev, isLoading: true, error: null }));
+
+    try {
+      await sendCommand({
+        duankou: '0',
+        hco: state.resourceHandle,
+        daima: `Z${ARM_CONTROLLER_CONFIG.zUp}`,
+      });
+      await sendCommand({
+        duankou: '0',
+        hco: state.resourceHandle,
+        daima: `X${homeCoord.x}Y${homeCoord.y}`,
+      });
+
+      addLog('复位', `${state.selectedDeviceTestSet} home (${homeCoord.x},${homeCoord.y})`);
+      setState(prev => ({
+        ...prev,
+        currentX: homeCoord.x,
+        currentY: homeCoord.y,
+        isLoading: false,
+      }));
+      await syncArmStateToMain({
+        currentX: homeCoord.x,
+        currentY: homeCoord.y,
+        zDepth: ARM_CONTROLLER_CONFIG.zUp,
+      });
+    } catch (error) {
+      addLog('错误', `复位失败: ${error instanceof Error ? error.message : 'Unknown'}`);
+      setState(prev => ({
+        ...prev,
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'Reset position failed',
+      }));
+    }
+  };
+
   /**
    * Executes an auto operation sequence.
    * If sequenceId is provided, runs that sequence; otherwise uses the currently selected one.
@@ -548,14 +613,16 @@ function ControlPanel() {
     async (
       targetId: string,
       armContext: SequenceExecutionArmContext,
+      deviceTestSetId: DeviceTestSetId,
       options?: { updateSelectedSequence?: boolean }
     ): Promise<SequenceExecutionResult> => {
-      const sequence = OPERATION_SEQUENCES.find((s) => s.id === targetId);
+      const sequence = getSequence(targetId, deviceTestSetId);
       if (!sequence) {
         return {
           success: false,
-          message: `Unknown sequence ID: ${targetId}`,
+          message: `Unknown ${deviceTestSetId} sequence ID: ${targetId}`,
           sequenceId: targetId,
+          deviceTestSetId,
           stepsCompleted: 0,
           totalSteps: 0,
         };
@@ -565,7 +632,7 @@ function ControlPanel() {
         setState((prev) => ({ ...prev, selectedSequenceId: targetId }));
       }
 
-      const steps = await resolveSequenceStepsForUi(sequence);
+      const steps = await resolveSequenceStepsForUi(sequence, deviceTestSetId);
       const totalVerifySteps = steps.filter((step) => !!step.ocrVerify).length;
       let finishedVerifySteps = 0;
       let stepsCompleted = 0;
@@ -583,7 +650,7 @@ function ControlPanel() {
         error: null,
         capturedWords: [],
       }));
-      addLog('自动', `开始执行自动操作序列: ${sequence.name}`);
+      addLog('自动', `开始执行 ${deviceTestSetId} 自动操作序列: ${sequence.name}`);
 
       const send = async (daima: string) => {
         await sendCommandToServer(armContext.serverIP, {
@@ -603,6 +670,7 @@ function ControlPanel() {
               message: `Sequence "${sequence.name}" stopped by user at step ${stepsCompleted + 1}`,
               sequenceId: targetId,
               sequenceName: sequence.name,
+              deviceTestSetId,
               stepsCompleted,
               totalSteps: steps.length,
             };
@@ -611,7 +679,10 @@ function ControlPanel() {
           const step = steps[i];
           setState((prev) => ({ ...prev, autoProgress: i + 1 }));
 
-          if (step.ocrVerify) {
+          if (step.moveOnly) {
+            await send(`X${step.x}Y${step.y}`);
+            addLog('自动', `${step.label} - 移动到 (${step.x},${step.y})`);
+          } else if (step.ocrVerify) {
             const verifyRound = finishedVerifySteps + 1;
             addLog('验证', `开始第 ${verifyRound}/${totalVerifySteps} 次确认题 OCR`);
             await send(`X${step.x}Y${step.y}`);
@@ -625,7 +696,15 @@ function ControlPanel() {
                   resolve((e as CustomEvent).detail);
                 };
                 window.addEventListener('qa-auto-hw:verify-ocr-result', handler);
-                window.dispatchEvent(new CustomEvent('qa-auto-hw:trigger-verify-ocr'));
+                const verifyScenes = DEVICE_OCR_SCENES[deviceTestSetId].verifyWallet;
+                window.dispatchEvent(
+                  new CustomEvent('qa-auto-hw:trigger-verify-ocr', {
+                    detail: {
+                      numberSceneConfig: verifyScenes?.number,
+                      optionsSceneConfig: verifyScenes?.options,
+                    },
+                  })
+                );
               }),
               new Promise<SequenceVerifyOcrResult>((resolve) =>
                 setTimeout(
@@ -786,6 +865,7 @@ function ControlPanel() {
           message: `Sequence "${sequence.name}" completed successfully`,
           sequenceId: targetId,
           sequenceName: sequence.name,
+          deviceTestSetId,
           stepsCompleted,
           totalSteps: steps.length,
           mnemonicState,
@@ -802,6 +882,7 @@ function ControlPanel() {
           message: `Sequence execution failed at step ${stepsCompleted + 1}: ${message}`,
           sequenceId: targetId,
           sequenceName: sequence.name,
+          deviceTestSetId,
           stepsCompleted,
           totalSteps: steps.length,
         };
@@ -822,11 +903,16 @@ function ControlPanel() {
     if (state.isLoading || !state.isConnected || !state.isReady || state.isAutoRunning) return;
 
     const targetId = sequenceId || state.selectedSequenceId;
-    await runSequenceExecution(targetId, {
-      isConnected: state.isConnected,
-      resourceHandle: state.resourceHandle,
-      serverIP: state.serverIP,
-    }, { updateSelectedSequence: !!sequenceId });
+    await runSequenceExecution(
+      targetId,
+      {
+        isConnected: state.isConnected,
+        resourceHandle: state.resourceHandle,
+        serverIP: state.serverIP,
+      },
+      state.selectedDeviceTestSet,
+      { updateSelectedSequence: !!sequenceId }
+    );
   }, [
     runSequenceExecution,
     state.isAutoRunning,
@@ -835,6 +921,7 @@ function ControlPanel() {
     state.isReady,
     state.resourceHandle,
     state.selectedSequenceId,
+    state.selectedDeviceTestSet,
     state.serverIP,
   ]);
 
@@ -844,18 +931,24 @@ function ControlPanel() {
     }
 
     return window.electronAPI.onMcpExecuteSequenceRequest(async (payload) => {
+      const requestedDeviceTestSet = payload.deviceTestSetId === 'pro2' ? 'pro2' : DEFAULT_DEVICE_TEST_SET_ID;
       if (state.isAutoRunning) {
         window.electronAPI?.sendMcpExecuteSequenceResponse?.({
           success: false,
           message: 'Renderer sequence execution is already running',
           sequenceId: payload.sequenceId,
+          deviceTestSetId: requestedDeviceTestSet,
           stepsCompleted: 0,
           totalSteps: 0,
         });
         return;
       }
 
-      const result = await runSequenceExecution(payload.sequenceId, payload.armState);
+      const result = await runSequenceExecution(
+        payload.sequenceId,
+        payload.armState,
+        requestedDeviceTestSet
+      );
       window.electronAPI?.sendMcpExecuteSequenceResponse?.(result);
     });
   }, [runSequenceExecution, state.isAutoRunning]);
@@ -933,7 +1026,14 @@ function ControlPanel() {
 
   const isControlDisabled = !state.isConnected || !state.isReady || state.isLoading || state.isAutoRunning;
 
-  const categorySequences = getSequencesByCategory(state.selectedCategory);
+  const sequenceCategories = getAllCategories(state.selectedDeviceTestSet);
+  const activeSequenceCategory = sequenceCategories.includes(state.selectedCategory)
+    ? state.selectedCategory
+    : sequenceCategories[0] ?? '';
+  const categorySequences = getSequencesByCategory(activeSequenceCategory, state.selectedDeviceTestSet);
+  const selectedDeviceTestSetName = DEVICE_TEST_SETS.find(
+    device => device.id === state.selectedDeviceTestSet
+  )?.name ?? state.selectedDeviceTestSet;
   const capturedFilledCount = state.capturedWords.filter((word) => !!word).length;
 
   return (
@@ -962,6 +1062,14 @@ function ControlPanel() {
             <span className="coordinate">X: {state.currentX}</span>
             <span className="coordinate">Y: {state.currentY}</span>
           </div>
+          <button
+            className="btn btn-secondary btn-connect"
+            onClick={handleResetPosition}
+            disabled={isControlDisabled}
+            title={`复位到 ${state.selectedDeviceTestSet === 'pro2' ? 'Pro2' : 'Pro'} home`}
+          >
+            复位
+          </button>
           <button
             className={`btn btn-connect ${state.isConnected ? 'btn-secondary' : 'btn-primary'}`}
             onClick={state.isConnected ? handleDisconnect : handleConnect}
@@ -1039,24 +1147,59 @@ function ControlPanel() {
 
         {/* Right: Preset Sequences */}
         <div className="sequence-section">
-          <h3>预置指令</h3>
+          <div className="sequence-header-row">
+            <div className="sequence-title-group">
+              <h3>预置指令</h3>
+              <span className="sequence-device-badge">{selectedDeviceTestSetName} 用例</span>
+            </div>
+            <label className="device-test-set-select">
+              <span>设备</span>
+              <select
+                value={state.selectedDeviceTestSet}
+                onChange={(e) => {
+                  const nextDevice = e.target.value === 'pro2' ? 'pro2' : DEFAULT_DEVICE_TEST_SET_ID;
+                  const nextCategories = getAllCategories(nextDevice);
+                  const nextCategory = nextCategories[0] ?? '';
+                  const nextSequence = getSequencesByCategory(nextCategory, nextDevice)[0];
+                  setState(prev => ({
+                    ...prev,
+                    selectedDeviceTestSet: nextDevice,
+                    selectedCategory: nextCategory,
+                    selectedSequenceId: nextSequence?.id ?? prev.selectedSequenceId,
+                  }));
+                }}
+                disabled={state.isAutoRunning}
+              >
+                {DEVICE_TEST_SETS.map(device => (
+                  <option key={device.id} value={device.id}>{device.name}</option>
+                ))}
+              </select>
+            </label>
+          </div>
           <div className="sequence-category-tabs">
-            {SEQUENCE_CATEGORIES.map(cat => (
+            {sequenceCategories.map(cat => (
               <button
-                key={cat}
-                className={`seq-cat-tab ${state.selectedCategory === cat ? 'active' : ''}`}
-                onClick={() => setState(prev => ({ ...prev, selectedCategory: cat }))}
+                key={`${state.selectedDeviceTestSet}:${cat}`}
+                className={`seq-cat-tab ${activeSequenceCategory === cat ? 'active' : ''}`}
+                onClick={() => {
+                  const nextSequence = getSequencesByCategory(cat, state.selectedDeviceTestSet)[0];
+                  setState(prev => ({
+                    ...prev,
+                    selectedCategory: cat,
+                    selectedSequenceId: nextSequence?.id ?? prev.selectedSequenceId,
+                  }));
+                }}
               >
                 {cat}
               </button>
             ))}
           </div>
-          <div className="sequence-list">
+          <div className="sequence-list" key={`sequence-list:${state.selectedDeviceTestSet}:${activeSequenceCategory}`}>
             {categorySequences.map(seq => {
               const isRunning = state.isAutoRunning && state.activeOperationKey === `sequence:${seq.id}`;
               return (
                 <button
-                  key={seq.id}
+                  key={`${state.selectedDeviceTestSet}:${seq.id}`}
                   className={`sequence-btn ${isRunning ? 'running' : ''}`}
                   onClick={() => {
                     if (isRunning) {
@@ -1066,7 +1209,11 @@ function ControlPanel() {
                     }
                   }}
                   disabled={(!isRunning && isControlDisabled) || (state.isAutoRunning && !isRunning)}
+                  title={`${selectedDeviceTestSetName}: ${seq.id}`}
                 >
+                  {state.selectedDeviceTestSet === 'pro2' && (
+                    <span className="seq-btn-device">Pro2</span>
+                  )}
                   <span className="seq-btn-name">{seq.name}</span>
                   {isRunning && (
                     <span className="seq-btn-progress">

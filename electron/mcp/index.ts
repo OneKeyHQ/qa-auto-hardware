@@ -43,7 +43,7 @@ import {
   executeMnemonicVerify,
 } from './tools';
 import { ARM_STATUS_URI, getArmStatusResource } from './resources';
-import { getAllSequenceIds } from './sequences';
+import { DEVICE_TEST_SETS, getAllSequenceIds } from './sequenceSets';
 import { sendMcpLog } from './state';
 
 /** MCP Server configuration */
@@ -257,7 +257,11 @@ export class QAAutoHardwareMcpServer {
         inputSchema: executeSequenceSchema,
       },
       async (args) => {
-        sendMcpLog({ type: 'request', action: 'execute-sequence', detail: `Sequence: ${args.sequenceId}` });
+        sendMcpLog({
+          type: 'request',
+          action: 'execute-sequence',
+          detail: `${args.deviceTestSetId ?? 'pro'} / ${args.sequenceId}`,
+        });
         const { output, frame } = await executeExecuteSequence(args, this.httpRequest);
         sendMcpLog({
           type: output.success ? 'response' : 'error',
@@ -673,6 +677,9 @@ export class QAAutoHardwareMcpServer {
         message: ocr.message,
         ocr,
         sequenceIds: getAllSequenceIds(),
+        sequenceSets: Object.fromEntries(
+          DEVICE_TEST_SETS.map((set) => [set.id, getAllSequenceIds(set.id)])
+        ),
         activeSessions: {
           streamable: this.streamableTransports.size,
           sse: this.sseTransports.size,

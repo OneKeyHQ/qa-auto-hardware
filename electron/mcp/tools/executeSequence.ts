@@ -22,8 +22,14 @@ import {
   setStopSequenceFlag,
   runSequenceInRenderer,
 } from '../state';
-import { getSequence, getPageAction, getAllSequenceIds } from '../sequences';
-import { resolvePageActionSteps } from '../sequenceResolver';
+import {
+  DEFAULT_DEVICE_TEST_SET_ID,
+  getAllSequenceIds,
+  getPageAction,
+  getSequence,
+  normalizeDeviceTestSetId,
+} from '../sequenceSets';
+import { resolvePageActionStepsForDevice } from '../sequenceSetResolver';
 import { saveCaptureToDownloads } from '../../saveCapture';
 import { executeClickStep, executeSwipeStep } from '../utils/executeStep';
 
@@ -33,7 +39,12 @@ import type { AutoStep } from '../sequences';
 export const executeSequenceSchema = z.object({
   sequenceId: z
     .string()
-    .describe(`The ID of the sequence to execute. Available: ${getAllSequenceIds().join(', ')}`),
+    .describe(`The ID of the sequence to execute. Available for each device set: ${getAllSequenceIds().join(', ')}`),
+  deviceTestSetId: z
+    .enum(['pro', 'pro2'])
+    .optional()
+    .default(DEFAULT_DEVICE_TEST_SET_ID)
+    .describe('Device test set to execute. Pro2 has a separate sequence definition file.'),
   returnFrame: z
     .boolean()
     .optional()
@@ -49,6 +60,7 @@ export interface ExecuteSequenceOutput {
   message: string;
   sequenceId?: string;
   sequenceName?: string;
+  deviceTestSetId?: string;
   stepsCompleted?: number;
   totalSteps?: number;
 }
@@ -90,7 +102,10 @@ async function executeStep(
   };
   const stepConfig = { clickDelay: ARM_CONFIG.clickDelay, zUp: ARM_CONFIG.zUp };
 
-  if (step.ocrCapture) {
+  if (step.moveOnly) {
+    await send(`X${step.x}Y${step.y}`);
+    updateArmState({ currentX: step.x, currentY: step.y });
+  } else if (step.ocrCapture) {
     const ocrCaptureConfig = typeof step.ocrCapture === 'object' ? step.ocrCapture : {};
     // OCR capture step: move arm out of the way without clicking
     await send(`X${step.x}Y${step.y}`);
@@ -192,23 +207,26 @@ export async function executeExecuteSequence(
   httpRequest: (url: string) => Promise<string>
 ): Promise<{ output: ExecuteSequenceOutput; frame: string | null }> {
   const state = getArmState();
+  const deviceTestSetId = normalizeDeviceTestSetId(input.deviceTestSetId);
 
   if (!state.isConnected || state.resourceHandle <= 0) {
     return {
       output: {
         success: false,
         message: 'Not connected to arm controller. Call arm-connect first.',
+        deviceTestSetId,
       },
       frame: null,
     };
   }
 
-  const sequence = getSequence(input.sequenceId);
+  const sequence = getSequence(input.sequenceId, deviceTestSetId);
   if (!sequence) {
     return {
       output: {
         success: false,
-        message: `Unknown sequence ID: ${input.sequenceId}. Available: ${getAllSequenceIds().join(', ')}`,
+        message: `Unknown ${deviceTestSetId} sequence ID: ${input.sequenceId}. Available: ${getAllSequenceIds(deviceTestSetId).join(', ')}`,
+        deviceTestSetId,
       },
       frame: null,
     };
@@ -219,19 +237,20 @@ export async function executeExecuteSequence(
   // 2. Actions with buildSteps (e.g. random share selection) are only evaluated once
   const resolvedActions: Array<{ action: NonNullable<ReturnType<typeof getPageAction>>; steps: AutoStep[] }> = [];
   for (const actionId of sequence.actions) {
-    const action = getPageAction(actionId);
+    const action = getPageAction(actionId, deviceTestSetId);
     if (!action) {
       return {
         output: {
           success: false,
-          message: `Unknown page action ID: ${actionId}`,
+          message: `Unknown ${deviceTestSetId} page action ID: ${actionId}`,
           sequenceId: sequence.id,
           sequenceName: sequence.name,
+          deviceTestSetId,
         },
         frame: null,
       };
     }
-    resolvedActions.push({ action, steps: resolvePageActionSteps(action) });
+    resolvedActions.push({ action, steps: resolvePageActionStepsForDevice(action, deviceTestSetId) });
   }
   const totalSteps = resolvedActions.reduce((sum, { steps }) => sum + steps.length, 0);
   let stepsCompleted = 0;
@@ -242,7 +261,7 @@ export async function executeExecuteSequence(
   setStopSequenceFlag(false);
   clearMnemonicWords();
 
-  const rendererResult = await runSequenceInRenderer(sequence.id);
+  const rendererResult = await runSequenceInRenderer(sequence.id, deviceTestSetId);
   if (rendererResult) {
     if (rendererResult.mnemonicState?.words?.length) {
       storeStructuredMnemonicState(
@@ -280,6 +299,7 @@ export async function executeExecuteSequence(
           : rendererResult.message,
         sequenceId: sequence.id,
         sequenceName: sequence.name,
+        deviceTestSetId,
         stepsCompleted: rendererResult.stepsCompleted,
         totalSteps: rendererResult.totalSteps,
       },
@@ -299,6 +319,7 @@ export async function executeExecuteSequence(
               message: `Sequence "${sequence.name}" stopped by user at step ${stepsCompleted + 1}`,
               sequenceId: sequence.id,
               sequenceName: sequence.name,
+              deviceTestSetId,
               stepsCompleted,
               totalSteps,
             },
@@ -374,6 +395,7 @@ export async function executeExecuteSequence(
           : `Sequence "${sequence.name}" completed successfully`,
         sequenceId: sequence.id,
         sequenceName: sequence.name,
+        deviceTestSetId,
         stepsCompleted,
         totalSteps,
       },
@@ -387,6 +409,7 @@ export async function executeExecuteSequence(
         message: `Sequence execution failed at step ${stepsCompleted + 1}: ${errorMessage}`,
         sequenceId: sequence.id,
         sequenceName: sequence.name,
+        deviceTestSetId,
         stepsCompleted,
         totalSteps,
       },

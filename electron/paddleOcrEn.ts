@@ -8,6 +8,7 @@ export interface PaddleOcrEnRequest {
   imageDataUrl: string;
   layoutHint?: 'mnemonic' | 'verify-options' | 'verify-number' | 'generic';
   expectedWordCount?: number;
+  recVariantCount?: number;
 }
 
 export interface PaddleOcrEnResult {

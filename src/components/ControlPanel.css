@@ -126,6 +126,53 @@
   margin: 0;
 }
 
+.sequence-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+}
+
+.sequence-title-group {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.sequence-device-badge,
+.seq-btn-device {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  font-size: 0.6875rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.device-test-set-select {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.device-test-set-select select {
+  height: 28px;
+  padding: 0 var(--spacing-sm);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  -webkit-app-region: no-drag;
+}
+
 .control-selectors {
   display: flex;
   justify-content: center;
