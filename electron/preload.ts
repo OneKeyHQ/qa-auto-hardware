@@ -15,10 +15,16 @@ interface MnemonicOcrRequestPayload {
   mergeWithStored?: boolean;
   allowPartial?: boolean;
   requireBip39?: boolean;
+  sceneConfig?: {
+    roi: { x: number; y: number; width: number; height: number };
+    scale?: number;
+    useNearestNeighbor?: boolean;
+  };
 }
 
 interface RendererSequenceExecutionRequestPayload {
   sequenceId: string;
+  deviceTestSetId?: string;
   armState: {
     isConnected: boolean;
     resourceHandle: number;
@@ -34,6 +40,7 @@ interface RendererSequenceExecutionResponsePayload {
   message: string;
   sequenceId: string;
   sequenceName?: string;
+  deviceTestSetId?: string;
   stepsCompleted: number;
   totalSteps: number;
   mnemonicState?: {
@@ -75,6 +82,7 @@ interface ResolvedSequenceStepPayload {
   swipeSegments?: number;
   swipeSegmentDelay?: number;
   swipeHoldDelay?: number;
+  moveOnly?: boolean;
   ocrCapture?: boolean | {
     expectedWordCount?: number;
     mergeWithStored?: boolean;
@@ -112,8 +120,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // HTTP request (bypasses CORS by going through main process)
   httpRequest: (url: string) => ipcRenderer.invoke('http-request', url),
 
-  resolveSequenceSteps: (sequenceId: string) =>
-    ipcRenderer.invoke('resolve-sequence-steps', sequenceId) as Promise<ResolvedSequenceStepPayload[]>,
+  resolveSequenceSteps: (sequenceId: string, deviceTestSetId?: string) =>
+    ipcRenderer.invoke('resolve-sequence-steps', sequenceId, deviceTestSetId) as Promise<ResolvedSequenceStepPayload[]>,
 
   tryRecoverArmConnection: (payload: { serverIP: string; comPort: string }) =>
     ipcRenderer.invoke('try-recover-arm-connection', payload) as Promise<{
@@ -228,12 +236,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   paddleOcrEnRecognize: (
     imageDataUrl: string,
     layoutHint?: 'mnemonic' | 'verify-options' | 'verify-number' | 'generic',
-    expectedWordCount?: number
+    expectedWordCount?: number,
+    recVariantCount?: number
   ) =>
     ipcRenderer.invoke('paddleocr-en-recognize', {
       imageDataUrl,
       layoutHint,
       expectedWordCount,
+      recVariantCount,
     }) as Promise<PaddleOcrEnPayload>,
 
   // MCP Log: Receive log entries from main process
@@ -271,7 +281,7 @@ declare global {
       onMainProcessMessage: (callback: (message: string) => void) => void;
       sendMessage: (channel: string, data: unknown) => void;
       httpRequest: (url: string) => Promise<{ status: number; data: string }>;
-      resolveSequenceSteps: (sequenceId: string) => Promise<ResolvedSequenceStepPayload[]>;
+      resolveSequenceSteps: (sequenceId: string, deviceTestSetId?: string) => Promise<ResolvedSequenceStepPayload[]>;
       tryRecoverArmConnection: (payload: {
         serverIP: string;
         comPort: string;
@@ -316,7 +326,8 @@ declare global {
       paddleOcrEnRecognize: (
         imageDataUrl: string,
         layoutHint?: 'mnemonic' | 'verify-options' | 'verify-number' | 'generic',
-        expectedWordCount?: number
+        expectedWordCount?: number,
+        recVariantCount?: number
       ) => Promise<PaddleOcrEnPayload>;
       onMcpServerReady: (callback: (info: { port: number }) => void) => void;
       // MCP Logs

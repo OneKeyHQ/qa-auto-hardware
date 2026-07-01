@@ -3,6 +3,8 @@ import type { Worker } from 'tesseract.js';
 import { validateMnemonic } from '@scure/bip39';
 import { wordlist as bip39English } from '@scure/bip39/wordlists/english.js';
 import { slip39English } from '../slip39Wordlist';
+import { DEVICE_OCR_SCENES, type SequenceOcrSceneConfig } from '../ocr/deviceScenes';
+import { getStoredDeviceTestSet } from '../deviceTestSetPreference';
 import {
   rotateVideoFrameToCanvas,
   cropToROI,
@@ -136,11 +138,57 @@ interface OcrTriggerOptions {
   mergeWithStored?: boolean;
   allowPartial?: boolean;
   requireBip39?: boolean;
+  sceneConfig?: SequenceOcrSceneConfig;
+}
+
+interface VerifyOcrTriggerOptions {
+  numberSceneConfig?: SequenceOcrSceneConfig;
+  optionsSceneConfig?: SequenceOcrSceneConfig;
 }
 
 type VideoWithFrameCallback = HTMLVideoElement & {
   requestVideoFrameCallback?: (callback: () => void) => number;
 };
+
+function withOcrSceneDefaults(
+  sceneConfig: SequenceOcrSceneConfig | undefined,
+  fallback: OcrSceneConfig
+): OcrSceneConfig | undefined {
+  if (!sceneConfig) return undefined;
+  return {
+    roi: sceneConfig.roi,
+    scale: sceneConfig.scale ?? fallback.scale,
+    useNearestNeighbor: sceneConfig.useNearestNeighbor ?? fallback.useNearestNeighbor,
+  };
+}
+
+function getCurrentDeviceOcrScenes() {
+  return DEVICE_OCR_SCENES[getStoredDeviceTestSet()];
+}
+
+function getCurrentDeviceRecVariantCount(layoutHint?: 'mnemonic' | 'verify-options' | 'verify-number' | 'generic'): number | undefined {
+  return getStoredDeviceTestSet() === 'pro2' && (layoutHint === 'mnemonic' || layoutHint === 'verify-options')
+    ? 4
+    : undefined;
+}
+
+function getCurrentMnemonicSceneConfig(): OcrSceneConfig | undefined {
+  return withOcrSceneDefaults(
+    getCurrentDeviceOcrScenes().createWallet?.mnemonic12,
+    MNEMONIC_SCENE
+  );
+}
+
+function getCurrentVerifySceneConfigs(): {
+  numberSceneConfig?: OcrSceneConfig;
+  optionsSceneConfig?: OcrSceneConfig;
+} {
+  const verifyWalletScenes = getCurrentDeviceOcrScenes().verifyWallet;
+  return {
+    numberSceneConfig: withOcrSceneDefaults(verifyWalletScenes?.number, VERIFY_NUMBER_SCENE),
+    optionsSceneConfig: withOcrSceneDefaults(verifyWalletScenes?.options, VERIFY_OPTIONS_SCENE),
+  };
+}
 
 function waitForNextVideoFrame(video: HTMLVideoElement): Promise<void> {
   return new Promise((resolve) => {
@@ -980,7 +1028,8 @@ function CameraPanel() {
       const paddle = await window.electronAPI.paddleOcrEnRecognize(
         ocrInputDataUrl,
         inferredLayoutHint,
-        options?.expectedWordCount
+        options?.expectedWordCount,
+        getCurrentDeviceRecVariantCount(inferredLayoutHint)
       );
       const fallbackConfidence = Number.isFinite(paddle.confidence) ? paddle.confidence : 0;
       return {
@@ -1041,49 +1090,51 @@ function CameraPanel() {
     onImageForOcr?: (dataUrl: string) => void;
     frameCanvas?: HTMLCanvasElement;
     maxIndex?: number;
+    sceneConfig?: OcrSceneConfig;
   }): Promise<{ number: number; rawText: string; confidence: number; imageDataUrl: string; preOcrImageDataUrl: string } | null> => {
     const maxIndex = Math.max(1, Math.min(24, Math.floor(options?.maxIndex ?? 12)));
+    const baseScene = options?.sceneConfig ?? VERIFY_NUMBER_SCENE;
     const fallbackScenes: OcrSceneConfig[] = [
       // Tight first-line crop (often improves "#N" visibility).
       {
-        ...VERIFY_NUMBER_SCENE,
+        ...baseScene,
         roi: {
-          x: VERIFY_NUMBER_SCENE.roi.x,
-          y: Math.max(0, VERIFY_NUMBER_SCENE.roi.y - 20),
-          width: VERIFY_NUMBER_SCENE.roi.width,
-          height: Math.max(60, Math.round(VERIFY_NUMBER_SCENE.roi.height * 0.72)),
+          x: baseScene.roi.x,
+          y: Math.max(0, baseScene.roi.y - 20),
+          width: baseScene.roi.width,
+          height: Math.max(60, Math.round(baseScene.roi.height * 0.72)),
         },
         scale: 7,
       },
       // Extra-tight hash-right area to catch a faint single digit (e.g. "#1").
       {
-        ...VERIFY_NUMBER_SCENE,
+        ...baseScene,
         roi: {
-          x: VERIFY_NUMBER_SCENE.roi.x + Math.round(VERIFY_NUMBER_SCENE.roi.width * 0.32),
-          y: Math.max(0, VERIFY_NUMBER_SCENE.roi.y - 20),
-          width: Math.max(120, Math.round(VERIFY_NUMBER_SCENE.roi.width * 0.45)),
-          height: Math.max(56, Math.round(VERIFY_NUMBER_SCENE.roi.height * 0.70)),
+          x: baseScene.roi.x + Math.round(baseScene.roi.width * 0.32),
+          y: Math.max(0, baseScene.roi.y - 20),
+          width: Math.max(120, Math.round(baseScene.roi.width * 0.45)),
+          height: Math.max(56, Math.round(baseScene.roi.height * 0.70)),
         },
         scale: 8,
       },
-      VERIFY_NUMBER_SCENE,
+      baseScene,
       {
-        ...VERIFY_NUMBER_SCENE,
+        ...baseScene,
         roi: {
-          x: Math.max(0, VERIFY_NUMBER_SCENE.roi.x - 40),
-          y: Math.max(0, VERIFY_NUMBER_SCENE.roi.y - 70),
-          width: VERIFY_NUMBER_SCENE.roi.width + 120,
-          height: VERIFY_NUMBER_SCENE.roi.height + 140,
+          x: Math.max(0, baseScene.roi.x - 40),
+          y: Math.max(0, baseScene.roi.y - 70),
+          width: baseScene.roi.width + 120,
+          height: baseScene.roi.height + 140,
         },
         scale: 4,
       },
       {
-        ...VERIFY_NUMBER_SCENE,
+        ...baseScene,
         roi: {
-          x: Math.max(0, VERIFY_NUMBER_SCENE.roi.x - 80),
-          y: Math.max(0, VERIFY_NUMBER_SCENE.roi.y - 120),
-          width: VERIFY_NUMBER_SCENE.roi.width + 220,
-          height: VERIFY_NUMBER_SCENE.roi.height + 260,
+          x: Math.max(0, baseScene.roi.x - 80),
+          y: Math.max(0, baseScene.roi.y - 120),
+          width: baseScene.roi.width + 220,
+          height: baseScene.roi.height + 260,
         },
         scale: 3,
       },
@@ -1208,35 +1259,42 @@ function CameraPanel() {
     if (bestAttempt) {
       // Paddle pass failed to get a valid index; fallback to Tesseract digits-only across ROI variants.
       const tesseractCandidates: NumberCandidate[] = [];
-      for (const scene of fallbackScenes) {
-        const tesseractResult = await runOcrOnRegion(scene, {
-          onImageForOcr: options?.onImageForOcr,
-          frameCanvas: options?.frameCanvas,
-          forceTesseract: true,
-          ocrParams: NUMBER_OCR_PARAMS,
-          layoutHint: 'verify-number',
-          expectedWordCount: maxIndex,
-        });
-        if (!tesseractResult) continue;
+      try {
+        for (const scene of fallbackScenes) {
+          const tesseractResult = await runOcrOnRegion(scene, {
+            onImageForOcr: options?.onImageForOcr,
+            frameCanvas: options?.frameCanvas,
+            forceTesseract: true,
+            ocrParams: NUMBER_OCR_PARAMS,
+            layoutHint: 'verify-number',
+            expectedWordCount: maxIndex,
+          });
+          if (!tesseractResult) continue;
 
-        const tesseractIndex = extractWordIndexFromText(tesseractResult.rawText, maxIndex);
-        console.log(
-          `[CameraPanel] Number OCR tesseract fallback raw: "${tesseractResult.rawText.trim()}", confidence: ${tesseractResult.confidence.toFixed(0)}%, roi=(${scene.roi.x},${scene.roi.y},${scene.roi.width},${scene.roi.height})`
-        );
-        if (tesseractIndex !== -1) {
-          tesseractCandidates.push({
-            number: tesseractIndex,
-            rawText: tesseractResult.rawText,
-            confidence: tesseractResult.confidence,
-            imageDataUrl: tesseractResult.imageDataUrl,
-            preOcrImageDataUrl: tesseractResult.preOcrImageDataUrl,
-            score: scoreNumberCandidate(
+          const tesseractIndex = extractWordIndexFromText(tesseractResult.rawText, maxIndex);
+          console.log(
+            `[CameraPanel] Number OCR tesseract fallback raw: "${tesseractResult.rawText.trim()}", confidence: ${tesseractResult.confidence.toFixed(0)}%, roi=(${scene.roi.x},${scene.roi.y},${scene.roi.width},${scene.roi.height})`
+          );
+          if (tesseractIndex !== -1) {
+            tesseractCandidates.push({
+              number: tesseractIndex,
+              rawText: tesseractResult.rawText,
+              confidence: tesseractResult.confidence,
+              imageDataUrl: tesseractResult.imageDataUrl,
+              preOcrImageDataUrl: tesseractResult.preOcrImageDataUrl,
+              score: scoreNumberCandidate(
               tesseractResult.rawText,
               tesseractIndex,
               tesseractResult.confidence
-            ),
-          });
+              ),
+            });
+          }
         }
+      } catch (error) {
+        console.warn(
+          '[CameraPanel] Number OCR tesseract fallback failed:',
+          error instanceof Error ? error.message : error
+        );
       }
 
       const bestTesseract = pickBestCandidate(tesseractCandidates);
@@ -1266,6 +1324,7 @@ function CameraPanel() {
     onImageForOcr?: (dataUrl: string) => void;
     frameCanvas?: HTMLCanvasElement;
     targetWord?: string;
+    sceneConfig?: OcrSceneConfig;
   }): Promise<{
     rawText: string;
     rawOptions: string[];
@@ -1273,25 +1332,26 @@ function CameraPanel() {
     imageDataUrl: string;
     preOcrImageDataUrl: string;
   } | null> => {
+    const baseScene = options?.sceneConfig ?? VERIFY_OPTIONS_SCENE;
     const fallbackScenes: OcrSceneConfig[] = [
-      VERIFY_OPTIONS_SCENE,
+      baseScene,
       {
-        ...VERIFY_OPTIONS_SCENE,
+        ...baseScene,
         roi: {
-          x: Math.max(0, VERIFY_OPTIONS_SCENE.roi.x - 40),
-          y: Math.max(0, VERIFY_OPTIONS_SCENE.roi.y - 40),
-          width: VERIFY_OPTIONS_SCENE.roi.width + 80,
-          height: VERIFY_OPTIONS_SCENE.roi.height + 120,
+          x: Math.max(0, baseScene.roi.x - 40),
+          y: Math.max(0, baseScene.roi.y - 40),
+          width: baseScene.roi.width + 80,
+          height: baseScene.roi.height + 120,
         },
         scale: 4,
       },
       {
-        ...VERIFY_OPTIONS_SCENE,
+        ...baseScene,
         roi: {
-          x: Math.max(0, VERIFY_OPTIONS_SCENE.roi.x - 80),
-          y: Math.max(0, VERIFY_OPTIONS_SCENE.roi.y - 90),
-          width: VERIFY_OPTIONS_SCENE.roi.width + 160,
-          height: VERIFY_OPTIONS_SCENE.roi.height + 220,
+          x: Math.max(0, baseScene.roi.x - 80),
+          y: Math.max(0, baseScene.roi.y - 90),
+          width: baseScene.roi.width + 160,
+          height: baseScene.roi.height + 220,
         },
         scale: 3,
       },
@@ -1821,9 +1881,10 @@ function CameraPanel() {
 
     try {
       await waitForVideoToSettle(video);
+      const mnemonicSceneConfig = getCurrentMnemonicSceneConfig();
 
       if (RAW_MNEMONIC_OCR_DEBUG_ONLY) {
-        const rawResult = await runOcrOnRegion(MNEMONIC_SCENE, {
+        const rawResult = await runOcrOnRegion(mnemonicSceneConfig ?? MNEMONIC_SCENE, {
           ocrParams: MNEMONIC_OCR_PARAMS,
         });
         if (!rawResult) {
@@ -1854,7 +1915,7 @@ function CameraPanel() {
     for (let attempt = 1; attempt <= MAX_OCR_RETRIES; attempt++) {
         console.log(`OCR attempt ${attempt}/${MAX_OCR_RETRIES}...`);
 
-        const result = await runSingleOcr();
+        const result = await runSingleOcr({ sceneConfig: mnemonicSceneConfig });
         
         if (!result) {
           console.warn('OCR attempt failed');
@@ -2306,6 +2367,7 @@ function CameraPanel() {
       const mergeWithStored = !!triggerOptions.mergeWithStored;
       const allowPartial = !!triggerOptions.allowPartial;
       const requireBip39 = triggerOptions.requireBip39 ?? true;
+      const triggerSceneConfig = withOcrSceneDefaults(triggerOptions.sceneConfig, MNEMONIC_SCENE);
 
       console.log(
         `[CameraPanel] External OCR trigger received (expected=${expectedWordCount}, merge=${mergeWithStored}, allowPartial=${allowPartial}, requireBip39=${requireBip39})`
@@ -2381,6 +2443,7 @@ function CameraPanel() {
                 );
               }
             },
+            sceneConfig: triggerSceneConfig,
             expectedWordCount,
             applyBip39Wordlist: requireBip39,
           });
@@ -2606,7 +2669,11 @@ function CameraPanel() {
 
   // Listen for verification OCR trigger events (from ControlPanel verification steps)
   useEffect(() => {
-    const handleTriggerVerifyOcr = async () => {
+    const handleTriggerVerifyOcr = async (event: Event) => {
+      const triggerOptions =
+        ((event as CustomEvent<VerifyOcrTriggerOptions | undefined>).detail ?? {}) as VerifyOcrTriggerOptions;
+      const numberSceneConfig = withOcrSceneDefaults(triggerOptions.numberSceneConfig, VERIFY_NUMBER_SCENE);
+      const optionsSceneConfig = withOcrSceneDefaults(triggerOptions.optionsSceneConfig, VERIFY_OPTIONS_SCENE);
       console.log('[CameraPanel] Verification OCR trigger received');
       setIsOcrProcessing(true);
       setFullFrameImageUrl(null);
@@ -2665,6 +2732,7 @@ function CameraPanel() {
           const numberResult = await runNumberOcr({
             frameCanvas,
             maxIndex: verifyMaxIndex,
+            sceneConfig: numberSceneConfig,
             onImageForOcr: (dataUrl) => {
               if (!verifyNumberSaved && window.electronAPI?.saveCaptureToDownloads) {
                 verifyNumberSaved = true;
@@ -2693,6 +2761,7 @@ function CameraPanel() {
           const optionsResult = await runVerifyOptionsOcr({
             frameCanvas,
             targetWord,
+            sceneConfig: optionsSceneConfig,
             onImageForOcr: (dataUrl) => {
               if (!verifyOptionsSaved && window.electronAPI?.saveCaptureToDownloads) {
                 verifyOptionsSaved = true;
@@ -2929,7 +2998,11 @@ function CameraPanel() {
 
   // Manually trigger verification-page OCR debug flow (single-frame dual ROI).
   const handleVerifyDebugOcr = () => {
-    window.dispatchEvent(new CustomEvent('qa-auto-hw:trigger-verify-ocr'));
+    window.dispatchEvent(
+      new CustomEvent('qa-auto-hw:trigger-verify-ocr', {
+        detail: getCurrentVerifySceneConfigs(),
+      })
+    );
   };
 
   return (

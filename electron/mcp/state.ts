@@ -2,6 +2,7 @@
  * Shared state management for MCP Server.
  * Maintains arm connection status, position, and provides state accessors.
  */
+import type { SequenceOcrSceneConfig } from './ocrScenes';
 
 export interface ArmState {
   /** Whether the arm is connected */
@@ -68,6 +69,7 @@ export interface MnemonicOcrRequest {
   mergeWithStored?: boolean;
   allowPartial?: boolean;
   requireBip39?: boolean;
+  sceneConfig?: SequenceOcrSceneConfig;
 }
 
 export interface MnemonicStoreMetadata {
@@ -119,7 +121,8 @@ export interface RendererSequenceExecutionResult {
 type MnemonicOcrCallback = (request?: MnemonicOcrRequest) => Promise<MnemonicOcrResult | null>;
 type VerifyOcrCallback = () => Promise<VerifyOcrResult | null>;
 type RendererSequenceExecutionCallback = (
-  sequenceId: string
+  sequenceId: string,
+  deviceTestSetId?: string
 ) => Promise<RendererSequenceExecutionResult | null>;
 
 /** Frame capture function (set by main process when renderer is ready) */
@@ -253,13 +256,14 @@ export function setRendererSequenceExecutionCallback(
 }
 
 export async function runSequenceInRenderer(
-  sequenceId: string
+  sequenceId: string,
+  deviceTestSetId?: string
 ): Promise<RendererSequenceExecutionResult | null> {
   if (!rendererSequenceExecutionCallback) {
     console.warn('Renderer sequence execution callback not set');
     return null;
   }
-  return rendererSequenceExecutionCallback(sequenceId);
+  return rendererSequenceExecutionCallback(sequenceId, deviceTestSetId);
 }
 
 /**

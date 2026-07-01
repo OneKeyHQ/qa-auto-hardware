@@ -1,13 +1,11 @@
 /**
- * Auto Operation Sequences
+ * Pro2 Auto Operation Sequences
  *
- * Defines all predefined operation sequences for device automation.
- * Uses a PageAction-based architecture where atomic page operations
- * can be freely composed into complex automation workflows.
- *
- * These sequences are used by both MCP tools and UI.
+ * This file is intentionally separate from sequences.ts (Pro).
+ * Pro2 starts with the same test items as Pro, but its coordinates and flows
+ * should be maintained here only while re-recording the new device.
  */
-import type { SequenceOcrSceneConfig } from './ocrScenes';
+import { PRO2_OCR_SCENES, type SequenceOcrSceneConfig } from './ocrScenes';
 
 /** Represents a single step in the auto operation sequence */
 export interface OcrCaptureOptions {
@@ -82,19 +80,19 @@ export interface MnemonicSource {
 
 /** Keyboard letter coordinates */
 export const LETTER_COORDS: Record<string, { x: number; y: number }> = {
-  q: { x: 17, y: 73 }, w: { x: 24, y: 74 }, e: { x: 28, y: 74 }, r: { x: 33, y: 74 },
-  t: { x: 37, y: 74 }, y: { x: 41, y: 74 }, u: { x: 45, y: 74 }, i: { x: 50, y: 74 },
-  o: { x: 55, y: 73 }, p: { x: 59, y: 74 },
-  a: { x: 19, y: 80 }, s: { x: 25, y: 80 }, d: { x: 29, y: 80 }, f: { x: 34, y: 80 },
-  g: { x: 39, y: 80 }, h: { x: 43, y: 80 }, j: { x: 49, y: 80 }, k: { x: 54, y: 80 },
-  l: { x: 59, y: 80 },
-  z: { x: 25, y: 88 }, x: { x: 30, y: 88 }, c: { x: 35, y: 88 }, v: { x: 39, y: 88 },
-  b: { x: 44, y: 88 }, n: { x: 49, y: 88 }, m: { x: 54, y: 88 },
+  q: { x: 192, y: 75 }, w: { x: 197, y: 75 }, e: { x: 202, y: 75 }, r: { x: 206, y: 75 },
+  t: { x: 210, y: 75 }, y: { x: 215, y: 75 }, u: { x: 220, y: 75 }, i: { x: 224, y: 75 },
+  o: { x: 228, y: 75 }, p: { x: 232, y: 75 },
+  a: { x: 194, y: 82 }, s: { x: 199, y: 82 }, d: { x: 203, y: 82 }, f: { x: 208, y: 82 },
+  g: { x: 212, y: 82 }, h: { x: 217, y: 82 }, j: { x: 222, y: 82 }, k: { x: 227, y: 82 },
+  l: { x: 231, y: 82 },
+  z: { x: 198, y: 91 }, x: { x: 203, y: 91 }, c: { x: 208, y: 91 }, v: { x: 213, y: 91 },
+  b: { x: 218, y: 91 }, n: { x: 222, y: 91 }, m: { x: 226, y: 91 },
 };
 
 /** Number coordinates on PIN pad */
 export const NUMBER_COORDS: Record<string, { x: number; y: number }> = {
-  '1': { x: 25, y: 50 },
+  '1': { x: 198, y: 59 },
   '2': { x: 35, y: 50 },
   '3': { x: 45, y: 50 },
   '4': { x: 25, y: 60 },
@@ -107,22 +105,22 @@ export const NUMBER_COORDS: Record<string, { x: number; y: number }> = {
 };
 
 /** Confirm button coordinate */
-export const CONFIRM_COORD = { x: 59, y: 87 };
+export const CONFIRM_COORD = { x: 196, y: 68 };
 
 /** Cancel/Back button coordinate */
 export const CANCEL_COORD = { x: 19, y: 87 };
 
 /** Device button coordinates */
 export const DEVICE_BUTTONS = {
-  confirm: { x: 55, y: 85 },
+  confirm: { x: 227, y: 94 },
   cancel: { x: 25, y: 85 },
   back: { x: 19, y: 87 },
-  continue: { x: 55, y: 85 },
-  next: { x: 55, y: 85 },
-  finish: { x: 55, y: 85 },
+  continue: { x: 212, y: 94 },
+  next: { x: 212, y: 94 },
+  finish: { x: 212, y: 94 },
 };
 
-/** Arm home coordinate for Pro. */
+/** Arm home coordinate for Pro2. */
 export const DEVICE_HOME_COORD = { x: 0, y: 0 } as const;
 
 // ============================================================================
@@ -232,65 +230,65 @@ export function generateSlip39ShareSteps(shares: string[][]): AutoStep[] {
 /** 12 words "all" input steps (legacy test) */
 const WORDS_12_STEPS: AutoStep[] = [
   // Word 1: "all"
-  { label: '点击单词a', x: 19, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击单词l', x: 59, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击单词l', x: 59, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击确认', x: 59, y: 87, depth: 12, delayAfter: 2000 },
+  { label: '点击单词a', x: 194, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击单词l', x: 231, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击单词l', x: 231, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击确认', x: 196, y: 68, depth: 12, delayAfter: 2000 },
   // Word 2: "all"
-  { label: '点击单词a', x: 19, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击单词l', x: 59, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击单词l', x: 59, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击确认', x: 59, y: 87, depth: 12, delayAfter: 2000 },
+  { label: '点击单词a', x: 194, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击单词l', x: 231, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击单词l', x: 231, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击确认', x: 196, y: 68, depth: 12, delayAfter: 2000 },
   // Word 3: "all"
-  { label: '点击单词a', x: 19, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击单词l', x: 59, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击单词l', x: 59, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击确认', x: 59, y: 87, depth: 12, delayAfter: 2000 },
+  { label: '点击单词a', x: 194, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击单词l', x: 231, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击单词l', x: 231, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击确认', x: 196, y: 68, depth: 12, delayAfter: 2000 },
   // Word 4: "all"
-  { label: '点击单词a', x: 19, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击单词l', x: 59, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击单词l', x: 59, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击确认', x: 59, y: 87, depth: 12, delayAfter: 2000 },
+  { label: '点击单词a', x: 194, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击单词l', x: 231, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击单词l', x: 231, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击确认', x: 196, y: 68, depth: 12, delayAfter: 2000 },
   // Word 5: "all"
-  { label: '点击单词a', x: 19, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击单词l', x: 59, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击单词l', x: 59, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击确认', x: 59, y: 87, depth: 12, delayAfter: 2000 },
+  { label: '点击单词a', x: 194, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击单词l', x: 231, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击单词l', x: 231, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击确认', x: 196, y: 68, depth: 12, delayAfter: 2000 },
   // Word 6: "all"
-  { label: '点击单词a', x: 19, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击单词l', x: 59, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击单词l', x: 59, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击确认', x: 59, y: 87, depth: 12, delayAfter: 2000 },
+  { label: '点击单词a', x: 194, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击单词l', x: 231, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击单词l', x: 231, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击确认', x: 196, y: 68, depth: 12, delayAfter: 2000 },
   // Word 7: "all"
-  { label: '点击单词a', x: 19, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击单词l', x: 59, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击单词l', x: 59, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击确认', x: 59, y: 87, depth: 12, delayAfter: 2000 },
+  { label: '点击单词a', x: 194, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击单词l', x: 231, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击单词l', x: 231, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击确认', x: 196, y: 68, depth: 12, delayAfter: 2000 },
   // Word 8: "all"
-  { label: '点击单词a', x: 19, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击单词l', x: 59, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击单词l', x: 59, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击确认', x: 59, y: 87, depth: 12, delayAfter: 2000 },
+  { label: '点击单词a', x: 194, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击单词l', x: 231, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击单词l', x: 231, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击确认', x: 196, y: 68, depth: 12, delayAfter: 2000 },
   // Word 9: "all"
-  { label: '点击单词a', x: 19, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击单词l', x: 59, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击单词l', x: 59, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击确认', x: 59, y: 87, depth: 12, delayAfter: 2000 },
+  { label: '点击单词a', x: 194, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击单词l', x: 231, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击单词l', x: 231, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击确认', x: 196, y: 68, depth: 12, delayAfter: 2000 },
   // Word 10: "all"
-  { label: '点击单词a', x: 19, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击单词l', x: 59, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击单词l', x: 59, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击确认', x: 59, y: 87, depth: 12, delayAfter: 2000 },
+  { label: '点击单词a', x: 194, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击单词l', x: 231, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击单词l', x: 231, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击确认', x: 196, y: 68, depth: 12, delayAfter: 2000 },
   // Word 11: "all"
-  { label: '点击单词a', x: 19, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击单词l', x: 59, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击单词l', x: 59, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击确认', x: 59, y: 87, depth: 12, delayAfter: 2000 },
+  { label: '点击单词a', x: 194, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击单词l', x: 231, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击单词l', x: 231, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击确认', x: 196, y: 68, depth: 12, delayAfter: 2000 },
   // Word 12: "all"
-  { label: '点击单词a', x: 19, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击单词l', x: 59, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击单词l', x: 59, y: 80, depth: 12, delayAfter: 1000 },
-  { label: '点击确认', x: 59, y: 87, depth: 12, delayAfter: 2000 },
+  { label: '点击单词a', x: 194, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击单词l', x: 231, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击单词l', x: 231, y: 82, depth: 12, delayAfter: 1000 },
+  { label: '点击确认', x: 196, y: 68, depth: 12, delayAfter: 2000 },
 ];
 
 // ============================================================================
@@ -303,12 +301,24 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
   // 初始设置 (Initial Setup)
   // --------------------------------------------------------------------------
   {
+    id: 'create-start-position',
+    name: '创建钱包起始坐标',
+    group: '初始设置',
+    steps: [
+      { label: '移动到创建起始坐标', x: 180, y: 0, depth: 12, moveOnly: true, delayAfter: 500 },
+    ],
+  },
+  {
     id: 'lang-zh',
     name: '选择中文',
     group: '初始设置',
     steps: [
-      { label: '选择语言', x: 30, y: 55, depth: 12 },
-      { label: '点击继续', x: 30, y: 85, depth: 12 },
+      { label: '点击Hello', x: 215, y: 65, depth: 12, delayAfter: 300 },
+      { label: '引导选择语言1', x: 212, y: 66, depth: 12, delayAfter: 300 },
+      { label: '引导选择语言2', x: 207, y: 73, depth: 12, delayAfter: 5000 },
+      { label: '引导选择语言3', x: 213, y: 80, depth: 12, delayAfter: 300 },
+      { label: '引导继续1', x: 202, y: 94, depth: 12, delayAfter: 300 },
+      { label: '引导继续2', x: 202, y: 94, depth: 12, delayAfter: 300 },
     ],
   },
   {
@@ -316,25 +326,26 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     name: '输入PIN码1111',
     group: '初始设置',
     steps: [
-      { label: '输入PIN码1', x: 25, y: 50, depth: 12 },
-      { label: '输入PIN码2', x: 25, y: 50, depth: 12 },
-      { label: '输入PIN码3', x: 25, y: 50, depth: 12 },
-      { label: '输入PIN码4', x: 25, y: 50, depth: 12 },
-      { label: '点击确认', x: 55, y: 85, depth: 12 },
-      { label: '再次确认PIN码1', x: 25, y: 50, depth: 12 },
-      { label: '再次确认PIN码2', x: 25, y: 50, depth: 12 },
-      { label: '再次确认PIN码3', x: 25, y: 50, depth: 12 },
-      { label: '再次确认PIN码4', x: 25, y: 50, depth: 12 },
-      { label: '点击确认', x: 55, y: 85, depth: 12, delayAfter: 900 },
+      { label: '输入PIN码1', x: 198, y: 59, depth: 12 },
+      { label: '输入PIN码2', x: 198, y: 59, depth: 12 },
+      { label: '输入PIN码3', x: 198, y: 59, depth: 12 },
+      { label: '输入PIN码4', x: 198, y: 59, depth: 12 },
+      { label: '点击确认', x: DEVICE_BUTTONS.confirm.x, y: DEVICE_BUTTONS.confirm.y, depth: 12 },
+      { label: '再次确认PIN码1', x: 198, y: 59, depth: 12 },
+      { label: '再次确认PIN码2', x: 198, y: 59, depth: 12 },
+      { label: '再次确认PIN码3', x: 198, y: 59, depth: 12 },
+      { label: '再次确认PIN码4', x: 198, y: 59, depth: 12 },
+      { label: '点击确认', x: DEVICE_BUTTONS.confirm.x, y: DEVICE_BUTTONS.confirm.y, depth: 12, delayAfter: 900 },
     ],
   },
   {
     id: 'nav-continue-setup',
-    name: '继续+稍后设置',
+    name: '继续+跳过指纹',
     group: '初始设置',
     steps: [
-      { label: '点击继续', x: 55, y: 85, depth: 12 },
-      { label: '点击稍后设置', x: 55, y: 85, depth: 12, delayAfter: 500 },
+      { label: '提示页面继续', x: 212, y: 94, depth: 12, delayAfter: 500 },
+      { label: '跳过指纹', x: 212, y: 94, depth: 12, delayAfter: 500 },
+      { label: '跳过指纹确认', x: 212, y: 94, depth: 12, delayAfter: 500 },
     ],
   },
 
@@ -346,7 +357,7 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     name: '导入钱包',
     group: '钱包路径',
     steps: [
-      { label: '点击导入钱包', x: 55, y: 85, depth: 12 },
+      { label: '点击导入钱包', x: 212, y: 94, depth: 12 },
     ],
   },
   {
@@ -354,7 +365,10 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     name: '创建新钱包',
     group: '钱包路径',
     steps: [
-      { label: '创建新钱包', x: 35, y: 75, depth: 12 },
+      { label: '选择创建钱包', x: 212, y: 82, depth: 12, delayAfter: 500 },
+      { label: '创建流程继续1', x: 212, y: 94, depth: 12, delayAfter: 500 },
+      { label: '创建流程继续2', x: 212, y: 94, depth: 12, delayAfter: 500 },
+      { label: '创建流程继续3', x: 212, y: 94, depth: 12, delayAfter: 1000 },
     ],
   },
 
@@ -366,7 +380,7 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     name: '选择助记词',
     group: '导入钱包',
     steps: [
-      { label: '点击助记词', x: 55, y: 75, depth: 12 },
+      { label: '点击助记词', x: 212, y: 82, depth: 12 },
     ],
   },
 
@@ -378,8 +392,8 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     name: '选择12个单词',
     group: '词数选择',
     steps: [
-      { label: '选择12个单词', x: 25, y: 50, depth: 12 },
-      { label: '点击继续', x: 55, y: 85, depth: 12 },
+      { label: '选择12个单词', x: 196, y: 61, depth: 12 },
+      { label: '点击继续', x: 212, y: 94, depth: 12 },
     ],
   },
   {
@@ -387,8 +401,8 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     name: '选择18个单词',
     group: '词数选择',
     steps: [
-      { label: '选择18个单词', x: 25, y: 60, depth: 12 },
-      { label: '点击继续', x: 55, y: 85, depth: 12 },
+      { label: '选择18个单词', x: 196, y: 71, depth: 12 },
+      { label: '点击继续', x: 212, y: 94, depth: 12 },
     ],
   },
   {
@@ -405,8 +419,8 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     name: '选择24个单词',
     group: '词数选择',
     steps: [
-      { label: '选择24个单词', x: 25, y: 80, depth: 12 },
-      { label: '点击继续', x: 55, y: 85, depth: 12 },
+      { label: '选择24个单词', x: 196, y: 81, depth: 12 },
+      { label: '点击继续', x: 212, y: 94, depth: 12 },
     ],
   },
   {
@@ -633,11 +647,25 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     group: '创建钱包',
     steps: [
       {
+        label: '助记词页轻微上滑',
+        x: 212,
+        y: 80,
+        depth: 12,
+        swipeTo: { x: 212, y: 50 },
+        swipeSegments: 1,
+        swipeHoldDelay: 120,
+        delayAfter: 1000,
+      },
+      {
         label: '移动到截图位置',
-        x: 85,
+        x: 259,
         y: 0,
         depth: 12,
-        ocrCapture: { expectedWordCount: 12, requireBip39: true },
+        ocrCapture: {
+          expectedWordCount: 12,
+          requireBip39: true,
+          sceneConfig: PRO2_OCR_SCENES.createWallet.mnemonic12,
+        },
         delayAfter: 2000,
       },
     ],
@@ -757,8 +785,8 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     name: '继续备份',
     group: '创建钱包',
     steps: [
-      { label: '点击继续', x: 40, y: 85, depth: 12 },
-      { label: '点击继续', x: 50, y: 85, depth: 12 },
+      { label: '点击继续', x: 212, y: 94, depth: 12 },
+      { label: '开始核对', x: 214, y: 82, depth: 12 },
     ],
   },
   {
@@ -768,12 +796,12 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     steps: [
       {
         label: '验证单词',
-        x: 85, y: 0, depth: 12,
+        x: 259, y: 0, depth: 12,
         ocrVerify: {
           options: [
-            { x: 35, y: 65, depth: 12 },
-            { x: 35, y: 75, depth: 12 },
-            { x: 35, y: 85, depth: 12 },
+            { x: 213, y: 72, depth: 12 },
+            { x: 213, y: 82, depth: 12 },
+            { x: 213, y: 94, depth: 12 },
           ],
         },
         delayAfter: 2000,
@@ -785,10 +813,10 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     name: '确认后继续并复位',
     group: '创建钱包',
     steps: [
-      { label: '点击继续1', x: 45, y: 85, depth: 12, delayAfter: 600 },
-      { label: '点击继续2', x: 45, y: 85, depth: 12, delayAfter: 600 },
-      { label: '点击继续3', x: 45, y: 85, depth: 12, delayAfter: 600 },
-      { label: '点击继续4', x: 45, y: 85, depth: 12, delayAfter: 800 },
+      { label: '点击继续1', x: 212, y: 94, depth: 12, delayAfter: 600 },
+      { label: '点击继续2', x: 212, y: 94, depth: 12, delayAfter: 600 },
+      { label: '点击继续3', x: 212, y: 94, depth: 12, delayAfter: 600 },
+      { label: '点击继续4', x: 212, y: 94, depth: 12, delayAfter: 800 },
       { label: '复位', x: DEVICE_HOME_COORD.x, y: DEVICE_HOME_COORD.y, depth: 12 },
     ],
   },
@@ -952,9 +980,10 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     name: '完成流程',
     group: '完成',
     steps: [
-      { label: '点击继续', x: 55, y: 85, depth: 12 },
-      { label: '点击下一步', x: 55, y: 85, depth: 12 },
-      { label: '点击完成', x: 55, y: 85, depth: 12, delayAfter: 2000 },
+      { label: '点击继续1', x: 212, y: 94, depth: 12 },
+      { label: '点击继续2', x: 212, y: 94, depth: 12 },
+      { label: '点击继续3', x: 212, y: 94, depth: 12 },
+      { label: '点击继续4', x: 212, y: 94, depth: 12, delayAfter: 2000 },
       { label: '复位', x: DEVICE_HOME_COORD.x, y: DEVICE_HOME_COORD.y, depth: 12 },
     ],
   },
@@ -963,9 +992,10 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     name: '完成流程(慢速)',
     group: '完成',
     steps: [
-      { label: '点击继续', x: 55, y: 85, depth: 12, delayAfter: 2000 },
-      { label: '点击下一步', x: 55, y: 85, depth: 12, delayAfter: 2000 },
-      { label: '点击完成', x: 55, y: 85, depth: 12, delayAfter: 3000 },
+      { label: '点击继续1', x: 212, y: 94, depth: 12, delayAfter: 2000 },
+      { label: '点击继续2', x: 212, y: 94, depth: 12, delayAfter: 2000 },
+      { label: '点击继续3', x: 212, y: 94, depth: 12, delayAfter: 2000 },
+      { label: '点击继续4', x: 212, y: 94, depth: 12, delayAfter: 3000 },
       { label: '复位', x: DEVICE_HOME_COORD.x, y: DEVICE_HOME_COORD.y, depth: 12 },
     ],
   },
@@ -979,40 +1009,46 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     group: '设备管理',
     steps: [
       // Wake up password keyboard (single click is enough)
-      { label: 'Wake keyboard', x: 35, y: 85, depth: 12, delayAfter: 1000 },
+      { label: 'Wake keyboard', x: DEVICE_BUTTONS.confirm.x, y: DEVICE_BUTTONS.confirm.y, depth: 12, delayAfter: 1000 },
       // Enter PIN 1111
-      { label: 'PIN 1', x: 25, y: 50, depth: 12 },
-      { label: 'PIN 2', x: 25, y: 50, depth: 12 },
-      { label: 'PIN 3', x: 25, y: 50, depth: 12 },
-      { label: 'PIN 4', x: 25, y: 50, depth: 12 },
-      { label: 'Confirm', x: 55, y: 85, depth: 12, delayAfter: 2000 },
-      // Enter settings
-      { label: 'Settings app', x: 50, y: 65, depth: 12 },
-      { label: 'Wallet section', x: 50, y: 55, depth: 12 },
-      // Swipe up — use x=50 (center) to stay in scrollable area, slow segmented for stability
-      { label: 'Swipe up', x: 50, y: 82, depth: 12, swipeTo: { x: 50, y: 38 }, swipeSegments: 8, swipeSegmentDelay: 80, swipeHoldDelay: 300, delayBefore: 500, delayAfter: 1400 },
-      // Double click — add delay so UI has time to react after each tap
-      { label: 'Click 1', x: 50, y: 85, depth: 12, delayAfter: 800 },
-      { label: 'Click 2', x: 50, y: 85, depth: 12, delayAfter: 800 },
-      // Settings navigation
-      { label: 'Setting 1', x: 25, y: 44, depth: 12, delayAfter: 600 },
-      { label: 'Setting 2', x: 25, y: 55, depth: 12, delayAfter: 900 },
-      // Swipe left to right, hold before release
+      { label: 'PIN 1', x: NUMBER_COORDS['1'].x, y: NUMBER_COORDS['1'].y, depth: 12 },
+      { label: 'PIN 2', x: NUMBER_COORDS['1'].x, y: NUMBER_COORDS['1'].y, depth: 12 },
+      { label: 'PIN 3', x: NUMBER_COORDS['1'].x, y: NUMBER_COORDS['1'].y, depth: 12 },
+      { label: 'PIN 4', x: NUMBER_COORDS['1'].x, y: NUMBER_COORDS['1'].y, depth: 12 },
+      { label: 'Confirm', x: DEVICE_BUTTONS.confirm.x, y: DEVICE_BUTTONS.confirm.y, depth: 12, delayAfter: 2000 },
+      // Enter reset flow
+      { label: '点击设置入口', x: 222, y: 75, depth: 12, delayAfter: 800 },
+      { label: '点击钱包项', x: 202, y: 59, depth: 12, delayAfter: 800 },
+      // Wallet 页面列表向上滑动一段距离后，点击重置按钮
       {
-        label: 'Swipe right',
-        x: 20,
-        y: 75,
+        label: '滑动钱包列表',
+        x: 206,
+        y: 95,
         depth: 12,
-        swipeTo: { x: 60, y: 75 },
-        swipeSegments: 6,
-        swipeSegmentDelay: 70,
-        swipeHoldDelay: 900,
-        delayAfter: 7000,
+        swipeTo: { x: 206, y: 35 },
+        swipeSegments: 2,
+        swipeSegmentDelay: 40,
+        swipeHoldDelay: 300,
+        delayBefore: 500,
+        delayAfter: 1400,
       },
-      // Final confirmation with wait
-      { label: 'Confirm', x: 25, y: 85, depth: 12, delayAfter: 10000 },
-      // Reset to origin
-      { label: 'Reset position', x: DEVICE_HOME_COORD.x, y: DEVICE_HOME_COORD.y, depth: 12 },
+      { label: '点击重置按钮', x: 206, y: 92, depth: 12, delayAfter: 600 },
+      { label: '确认重置入口', x: 222, y: 67, depth: 12, delayAfter: 2000 },
+      { label: '确认选项1', x: 196, y: 54, depth: 12, delayAfter: 800 },
+      { label: '确认选项2', x: 196, y: 67, depth: 12, delayAfter: 900 },
+      {
+        label: '滑动确认重置',
+        x: 196,
+        y: 91,
+        depth: 12,
+        swipeTo: { x: 231, y: 91 },
+        swipeSegments: 2,
+        swipeSegmentDelay: 40,
+        swipeHoldDelay: 900,
+        delayAfter: 10000,
+      },
+      // 复位机械臂：还原到 home 坐标
+      { label: '复位', x: DEVICE_HOME_COORD.x, y: DEVICE_HOME_COORD.y, depth: 12 },
     ],
   },
   {
@@ -1073,14 +1109,13 @@ const IMPORT_PREFIX: string[] = [
 
 /** Create wallet shared action prefix */
 const CREATE_PREFIX: string[] = [
-  'lang-zh', 'pin-1111', 'nav-continue-setup', 'nav-create',
+  'create-start-position', 'lang-zh', 'pin-1111', 'nav-continue-setup', 'nav-create',
 ];
 /** Create 18/24 wallet prefix: already on create page, do not click "创建新钱包". */
 const CREATE_PREFIX_DIRECT_EXPAND: string[] = [
   'lang-zh', 'pin-1111', 'nav-continue-setup',
 ];
 const CREATE_FLOW_SUFFIX: string[] = [
-  'create-backup-confirm',
   'create-screenshot-12',
   'create-continue',
   'create-verify-word',
@@ -1359,6 +1394,27 @@ const ALL_SEQUENCES: AutoSequence[] = [
   },
 ];
 
+const SUPPORTED_PRO2_SEQUENCE_IDS = new Set<string>([
+  'reset-wallet',
+  'reset-wallet-locked',
+  'create-wallet',
+  'words-12',
+  'one-normal-12',
+  'two-normal-12',
+  'three-normal-12',
+  'api-normal-12',
+  'one-normal-18',
+  'two-normal-18',
+  'three-normal-18',
+  'one-normal-24',
+  'two-normal-24',
+  'three-normal-24',
+]);
+
+const VISIBLE_SEQUENCES: AutoSequence[] = ALL_SEQUENCES.filter((sequence) =>
+  SUPPORTED_PRO2_SEQUENCE_IDS.has(sequence.id)
+);
+
 // ============================================================================
 // PageAction Query Functions
 // ============================================================================
@@ -1407,14 +1463,14 @@ export function getAllPageActionGroups(): string[] {
  * Gets a sequence by ID.
  */
 export function getSequence(id: string): AutoSequence | undefined {
-  return ALL_SEQUENCES.find((s) => s.id === id);
+  return VISIBLE_SEQUENCES.find((s) => s.id === id);
 }
 
 /**
  * Gets all available sequence IDs.
  */
 export function getAllSequenceIds(): string[] {
-  return ALL_SEQUENCES.map((s) => s.id);
+  return VISIBLE_SEQUENCES.map((s) => s.id);
 }
 
 /**
@@ -1423,7 +1479,7 @@ export function getAllSequenceIds(): string[] {
 export function getAllCategories(): string[] {
   const seen = new Set<string>();
   const categories: string[] = [];
-  for (const seq of ALL_SEQUENCES) {
+  for (const seq of VISIBLE_SEQUENCES) {
     if (!seen.has(seq.category)) {
       seen.add(seq.category);
       categories.push(seq.category);
@@ -1436,7 +1492,7 @@ export function getAllCategories(): string[] {
  * Gets sequences filtered by category.
  */
 export function getSequencesByCategory(category: string): AutoSequence[] {
-  return ALL_SEQUENCES.filter((s) => s.category === category);
+  return VISIBLE_SEQUENCES.filter((s) => s.category === category);
 }
 
 /**

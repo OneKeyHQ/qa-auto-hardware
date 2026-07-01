@@ -21,10 +21,16 @@ interface MnemonicOcrRequestPayload {
   mergeWithStored?: boolean;
   allowPartial?: boolean;
   requireBip39?: boolean;
+  sceneConfig?: {
+    roi: { x: number; y: number; width: number; height: number };
+    scale?: number;
+    useNearestNeighbor?: boolean;
+  };
 }
 
 interface RendererSequenceExecutionRequestPayload {
   sequenceId: string;
+  deviceTestSetId?: string;
   armState: {
     isConnected: boolean;
     resourceHandle: number;
@@ -40,6 +46,7 @@ interface RendererSequenceExecutionResponsePayload {
   message: string;
   sequenceId: string;
   sequenceName?: string;
+  deviceTestSetId?: string;
   stepsCompleted: number;
   totalSteps: number;
   mnemonicState?: {
@@ -81,6 +88,7 @@ interface ResolvedSequenceStepPayload {
   swipeSegments?: number;
   swipeSegmentDelay?: number;
   swipeHoldDelay?: number;
+  moveOnly?: boolean;
   ocrCapture?: boolean | {
     expectedWordCount?: number;
     mergeWithStored?: boolean;
@@ -99,7 +107,7 @@ interface Window {
     onMainProcessMessage: (callback: (message: string) => void) => void;
     sendMessage: (channel: string, data: unknown) => void;
     httpRequest: (url: string) => Promise<{ status: number; data: string }>;
-    resolveSequenceSteps: (sequenceId: string) => Promise<ResolvedSequenceStepPayload[]>;
+    resolveSequenceSteps: (sequenceId: string, deviceTestSetId?: string) => Promise<ResolvedSequenceStepPayload[]>;
     tryRecoverArmConnection: (payload: {
       serverIP: string;
       comPort: string;
@@ -145,7 +153,8 @@ interface Window {
     paddleOcrEnRecognize: (
       imageDataUrl: string,
       layoutHint?: 'mnemonic' | 'verify-options' | 'verify-number' | 'generic',
-      expectedWordCount?: number
+      expectedWordCount?: number,
+      recVariantCount?: number
     ) => Promise<PaddleOcrEnPayload>;
     onMcpServerReady: (callback: (info: { port: number }) => void) => void;
     // MCP Logs
