@@ -31,10 +31,19 @@ function extractBase64(dataUrlOrBase64: string): string {
 }
 
 /**
+ * Picks the file extension matching the data URL mime type (default jpg).
+ */
+function extensionForDataUrl(dataUrlOrBase64: string): string {
+  const match = dataUrlOrBase64.match(/^data:image\/(png|jpeg|webp)/);
+  if (!match) return 'jpg';
+  return match[1] === 'jpeg' ? 'jpg' : match[1];
+}
+
+/**
  * Saves a capture (data URL or raw base64) to the user's Downloads folder.
- * Filename: qa-auto-hw-YYYYMMDD-HHmmss-sss-{contentHint}.jpg
+ * Filename: qa-auto-hw-YYYYMMDD-HHmmss-sss-{contentHint}.{ext}
  *
- * @param dataUrlOrBase64 - JPEG as data URL or raw base64 string
+ * @param dataUrlOrBase64 - image as data URL or raw base64 string (assumed JPEG)
  * @param contentHint - Short label for the file (e.g. ocr-x85-y0, ocr-trigger)
  * @returns Full path of the saved file
  */
@@ -48,7 +57,7 @@ export async function saveCaptureToDownloads(
   const hhmmss = now.toTimeString().slice(0, 8).replace(/:/g, '');
   const ms = now.getMilliseconds().toString().padStart(3, '0');
   const hint = sanitizeHint(contentHint);
-  const filename = `qa-auto-hw-${dateStr}-${hhmmss}-${ms}-${hint}.jpg`;
+  const filename = `qa-auto-hw-${dateStr}-${hhmmss}-${ms}-${hint}.${extensionForDataUrl(dataUrlOrBase64)}`;
   const fullPath = path.join(downloadsDir, filename);
 
   const base64 = extractBase64(dataUrlOrBase64);

@@ -73,7 +73,7 @@ interface VerifyOcrPayload {
 interface PaddleOcrEnPayload {
   text: string;
   confidence: number;
-  backend: 'en_PP-OCRv5_mobile_rec';
+  backend: 'PP-OCRv6_medium_rec_onnx';
   elapsedMs: number;
 }
 
@@ -94,6 +94,12 @@ interface ResolvedSequenceStepPayload {
     mergeWithStored?: boolean;
     allowPartial?: boolean;
     requireBip39?: boolean;
+    sceneConfig?: {
+      roi: { x: number; y: number; width: number; height: number };
+      scale?: number;
+      useNearestNeighbor?: boolean;
+    };
+    deviceTestSetId?: 'pro' | 'pro2';
   };
   ocrVerify?: {
     options: { x: number; y: number; depth: number }[];
@@ -154,7 +160,8 @@ interface Window {
       imageDataUrl: string,
       layoutHint?: 'mnemonic' | 'verify-options' | 'verify-number' | 'generic',
       expectedWordCount?: number,
-      recVariantCount?: number
+      recVariantCount?: number,
+      wordlistHint?: 'bip39' | 'slip39'
     ) => Promise<PaddleOcrEnPayload>;
     onMcpServerReady: (callback: (info: { port: number }) => void) => void;
     // MCP Logs

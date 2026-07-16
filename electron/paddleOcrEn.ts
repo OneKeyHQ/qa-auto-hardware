@@ -9,12 +9,14 @@ export interface PaddleOcrEnRequest {
   layoutHint?: 'mnemonic' | 'verify-options' | 'verify-number' | 'generic';
   expectedWordCount?: number;
   recVariantCount?: number;
+  /** Closed wordlist of the current flow (BIP39 vs SLIP39 — never mixed). */
+  wordlistHint?: 'bip39' | 'slip39';
 }
 
 export interface PaddleOcrEnResult {
   text: string;
   confidence: number;
-  backend: 'en_PP-OCRv5_mobile_rec';
+  backend: 'PP-OCRv6_medium_rec_onnx';
   elapsedMs: number;
 }
 
@@ -34,6 +36,7 @@ const HEALTH_CACHE_TTL_MS = 30 * 1000;
 const REQUIRED_PYTHON_MODULES = [
   'paddleocr',
   'paddle',
+  'onnxruntime',
   'cv2',
   'PIL',
   'yaml',
@@ -41,19 +44,24 @@ const REQUIRED_PYTHON_MODULES = [
 ] as const;
 const REQUIRED_MODEL_CONFIGS = [
   {
-    name: 'en_PP-OCRv5_mobile_rec',
-    envKeys: ['QA_AUTO_HW_OCR_MODEL_DIR', 'QA_AUTO_HW_EN_OCR_MODEL_DIR'],
+    name: 'PP-OCRv6_medium_rec_onnx',
+    envKeys: [
+      'QA_AUTO_HW_OCR_MODEL_DIR',
+      'QA_AUTO_HW_EN_OCR_MODEL_DIR',
+      'QA_AUTO_HW_OCR_MULTI_REC_MODEL_DIR',
+    ],
   },
   {
-    name: 'PP-OCRv5_mobile_rec',
-    envKeys: ['QA_AUTO_HW_OCR_MULTI_REC_MODEL_DIR'],
-  },
-  {
-    name: 'PP-OCRv5_mobile_det',
+    name: 'PP-OCRv6_medium_det_onnx',
     envKeys: ['QA_AUTO_HW_OCR_DET_MODEL_DIR'],
   },
 ] as const;
-const REQUIRED_MODEL_FILES = ['inference.json', 'inference.pdiparams', 'inference.yml'] as const;
+const REQUIRED_MODEL_FILE_CONFIGS = [
+  {
+    suffixes: ['inference.json', 'inference.onnx', 'inference.yml'],
+  },
+] as const;
+const REQUIRED_MODEL_FILES = REQUIRED_MODEL_FILE_CONFIGS[0].suffixes;
 
 let cachedHealthStatus: { expiresAt: number; value: PaddleOcrEnHealthStatus } | null = null;
 
@@ -271,14 +279,14 @@ class PaddleOcrEnDaemon {
     await this.ensureStarted();
 
     if (!this.child) {
-      throw new Error('PP-OCRv5 rec daemon is not running');
+      throw new Error('PP-OCRv6 rec daemon is not running');
     }
 
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error('PP-OCRv5 rec request timed out after 2 minutes'));
+        reject(new Error('PP-OCRv6 rec request timed out after 2 minutes'));
       }, 2 * 60 * 1000);
 
       this.pending.set(id, { resolve, reject, timer });
@@ -294,7 +302,7 @@ class PaddleOcrEnDaemon {
     }
     this.startPromise = null;
     this.stdoutBuffer = '';
-    this.rejectAllPending(new Error('PP-OCRv5 rec daemon stopped'));
+    this.rejectAllPending(new Error('PP-OCRv6 rec daemon stopped'));
   }
 
   private async ensureStarted(): Promise<void> {
@@ -335,7 +343,7 @@ class PaddleOcrEnDaemon {
 
       const bootTimeout = setTimeout(() => {
         child.kill('SIGKILL');
-        reject(new Error('Timed out while starting PP-OCRv5 rec daemon'));
+        reject(new Error('Timed out while starting PP-OCRv6 rec daemon'));
       }, 45 * 1000);
 
       child.stdout.on('data', (chunk: Buffer) => {
@@ -359,14 +367,14 @@ class PaddleOcrEnDaemon {
       child.on('error', (err) => {
         clearTimeout(bootTimeout);
         this.child = null;
-        reject(new Error(`Failed to start PP-OCRv5 rec daemon: ${err.message}`));
+        reject(new Error(`Failed to start PP-OCRv6 rec daemon: ${err.message}`));
       });
 
       child.on('close', (code) => {
         clearTimeout(bootTimeout);
         this.child = null;
         this.startPromise = null;
-        const reason = `PP-OCRv5 rec daemon exited with code ${code}. stderr: ${this.stderrBuffer.trim() || '(empty)'}`;
+        const reason = `PP-OCRv6 rec daemon exited with code ${code}. stderr: ${this.stderrBuffer.trim() || '(empty)'}`;
         this.rejectAllPending(new Error(reason));
       });
     }).finally(() => {
@@ -391,6 +399,11 @@ class PaddleOcrEnDaemon {
       }
 
       if (parsed.type === 'ready') {
+        console.log(
+          `[paddleOcrEn] OCR server ready (script version: ${
+            typeof parsed.scriptVersion === 'string' ? parsed.scriptVersion : 'pre-versioning'
+          })`
+        );
         options?.onReady?.();
         continue;
       }
@@ -407,7 +420,7 @@ class PaddleOcrEnDaemon {
         const errorText =
           typeof parsed.error === 'string'
             ? parsed.error
-            : 'Unknown PP-OCRv5 rec daemon error';
+            : 'Unknown PP-OCRv6 rec daemon error';
         pending.reject(new Error(errorText));
         continue;
       }
@@ -415,7 +428,7 @@ class PaddleOcrEnDaemon {
       pending.resolve({
         text: typeof parsed.text === 'string' ? parsed.text : '',
         confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0,
-        backend: 'en_PP-OCRv5_mobile_rec',
+        backend: 'PP-OCRv6_medium_rec_onnx',
         elapsedMs: typeof parsed.elapsedMs === 'number' ? parsed.elapsedMs : 0,
       });
     }

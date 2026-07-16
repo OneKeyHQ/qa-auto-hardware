@@ -70,6 +70,7 @@ export interface MnemonicOcrRequest {
   allowPartial?: boolean;
   requireBip39?: boolean;
   sceneConfig?: SequenceOcrSceneConfig;
+  deviceTestSetId?: 'pro' | 'pro2';
 }
 
 export interface MnemonicStoreMetadata {

@@ -679,6 +679,10 @@ function ControlPanel() {
           const step = steps[i];
           setState((prev) => ({ ...prev, autoProgress: i + 1 }));
 
+          if ((step.delayBefore ?? 0) > 0) {
+            await delay(step.delayBefore ?? 0);
+          }
+
           if (step.moveOnly) {
             await send(`X${step.x}Y${step.y}`);
             addLog('自动', `${step.label} - 移动到 (${step.x},${step.y})`);
@@ -700,6 +704,7 @@ function ControlPanel() {
                 window.dispatchEvent(
                   new CustomEvent('qa-auto-hw:trigger-verify-ocr', {
                     detail: {
+                      deviceTestSetId,
                       numberSceneConfig: verifyScenes?.number,
                       optionsSceneConfig: verifyScenes?.options,
                     },
@@ -776,7 +781,12 @@ function ControlPanel() {
                 };
                 window.addEventListener('qa-auto-hw:ocr-result', handler);
                 window.dispatchEvent(
-                  new CustomEvent('qa-auto-hw:trigger-ocr', { detail: ocrCaptureConfig })
+                  new CustomEvent('qa-auto-hw:trigger-ocr', {
+                    detail: {
+                      ...ocrCaptureConfig,
+                      deviceTestSetId,
+                    },
+                  })
                 );
               }),
               new Promise<SequenceOcrResult>((resolve) =>
