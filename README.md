@@ -106,9 +106,8 @@ yarn setup:ocr
 # Download OCR models
 python3 - <<'PY'
 from huggingface_hub import snapshot_download
-snapshot_download('PaddlePaddle/en_PP-OCRv5_mobile_rec', local_dir='models/paddle_ocr/en_PP-OCRv5_mobile_rec')
-snapshot_download('PaddlePaddle/PP-OCRv5_mobile_det', local_dir='models/paddle_ocr/PP-OCRv5_mobile_det')
-snapshot_download('PaddlePaddle/PP-OCRv5_mobile_rec', local_dir='models/paddle_ocr/PP-OCRv5_mobile_rec')
+snapshot_download('PaddlePaddle/PP-OCRv6_medium_rec_onnx', local_dir='models/paddle_ocr/PP-OCRv6_medium_rec_onnx')
+snapshot_download('PaddlePaddle/PP-OCRv6_medium_det_onnx', local_dir='models/paddle_ocr/PP-OCRv6_medium_det_onnx')
 print('done')
 PY
 
@@ -131,8 +130,8 @@ yarn build:linux      # Linux
 
 QA Auto Hardware uses a dual-path OCR pipeline for hardware wallet mnemonic capture:
 
-- **Mnemonic display page & confirmation option area**: `en_PP-OCRv5_mobile_rec`
-- **Confirmation page question number area (`#N`)**: `PP-OCRv5_mobile_det` + `PP-OCRv5_mobile_rec`
+- **Mnemonic display page & confirmation option area**: `PP-OCRv6_medium_rec_onnx`
+- **Confirmation page question number area (`#N`)**: `PP-OCRv6_medium_det_onnx` + `PP-OCRv6_medium_rec_onnx`
 
 **Typical workflow:**
 
@@ -145,9 +144,16 @@ QA Auto Hardware uses a dual-path OCR pipeline for hardware wallet mnemonic capt
 
 | Model | Environment Variable Override |
 |-------|-------------------------------|
-| `en_PP-OCRv5_mobile_rec` | `QA_AUTO_HW_OCR_MODEL_DIR` |
-| `PP-OCRv5_mobile_det` | `QA_AUTO_HW_OCR_DET_MODEL_DIR` |
-| `PP-OCRv5_mobile_rec` | `QA_AUTO_HW_OCR_MULTI_REC_MODEL_DIR` |
+| `PP-OCRv6_medium_rec_onnx` | `QA_AUTO_HW_OCR_MODEL_DIR` |
+| `PP-OCRv6_medium_det_onnx` | `QA_AUTO_HW_OCR_DET_MODEL_DIR` |
+
+To try the smaller PP-OCRv6 small models:
+
+```bash
+QA_AUTO_HW_OCR_MODEL_DIR=models/paddle_ocr/PP-OCRv6_small_rec_onnx \
+QA_AUTO_HW_OCR_DET_MODEL_DIR=models/paddle_ocr/PP-OCRv6_small_det_onnx \
+yarn electron:dev
+```
 
 Optional tuning: `QA_AUTO_HW_OCR_MAX_IMAGE_SIDE` (default 1280), `QA_AUTO_HW_OCR_CPU_THREADS` (default 4)
 

@@ -27,6 +27,50 @@ export type DeviceOcrScenes = {
   };
 };
 
+export const PRO_OCR_SCENES = {
+  createWallet: {
+    // 12-word grid only (rows at y≈725-1227): excludes status bar and Chinese
+    // header so OCR resolution goes entirely to the numbered words.
+    mnemonic12: {
+      roi: { x: 225, y: 690, width: 665, height: 580 },
+      scale: 5,
+      useNearestNeighbor: true,
+    },
+    // 18-word page: no big title, instruction line ends ~y565, 9 grid rows at
+    // y≈610-1370 (the legacy ROI bottom at 1360 clipped row 9).
+    mnemonic18: {
+      roi: { x: 225, y: 580, width: 665, height: 830 },
+      scale: 5,
+      useNearestNeighbor: true,
+    },
+    // 20/24-word lists are a scrolled 2-column window. Part1 (unscrolled):
+    // header above, 8 rows at y≈729-1401, cyan 继续 button from y≈1419 — the
+    // ROI must stop above it. Part2 (scrolled): full rows at y≈565-1322 with a
+    // half-clipped row near the status bar; span the whole list viewport to
+    // absorb scroll-position variance between runs.
+    mnemonic24Part1: {
+      roi: { x: 225, y: 695, width: 665, height: 715 },
+      scale: 5,
+      useNearestNeighbor: true,
+    },
+    mnemonic24Part2: {
+      roi: { x: 225, y: 520, width: 665, height: 890 },
+      scale: 5,
+      useNearestNeighbor: true,
+    },
+  },
+  verifyWallet: {
+    // "单词 #N" title sits at y≈545-615; the old default ROI (y 480-610) was
+    // almost entirely above it. Keep the title in the upper part so the tight
+    // first-line fallback crop (y-20, 72% height) still contains the digits.
+    number: {
+      roi: { x: 160, y: 530, width: 520, height: 170 },
+      scale: 5,
+      useNearestNeighbor: true,
+    },
+  },
+} as const satisfies DeviceOcrScenes;
+
 export const PRO2_OCR_SCENES = {
   createWallet: {
     mnemonic12: {
@@ -50,6 +94,6 @@ export const PRO2_OCR_SCENES = {
 } as const satisfies DeviceOcrScenes;
 
 export const DEVICE_OCR_SCENES: Record<'pro' | 'pro2', DeviceOcrScenes> = {
-  pro: {},
+  pro: PRO_OCR_SCENES,
   pro2: PRO2_OCR_SCENES,
 };

@@ -5,7 +5,8 @@
 # Or manually: pip install -r scripts/requirements.txt
 
 paddlepaddle==3.0.0
-paddleocr>=2.9.0
+paddleocr>=3.7.0
+onnxruntime>=1.17.0
 opencv-python>=4.9.0
 Pillow>=10.0.0
 PyYAML>=6.0

@@ -666,7 +666,7 @@ ipcMain.handle(
 );
 
 /**
- * IPC handler: Runs en_PP-OCRv5_mobile_rec inference in a Python subprocess.
+ * IPC handler: Runs PP-OCRv6 small OCR inference in a Python subprocess.
  */
 ipcMain.handle(
   'paddleocr-en-recognize',
@@ -677,6 +677,7 @@ ipcMain.handle(
       layoutHint?: 'mnemonic' | 'verify-options' | 'verify-number' | 'generic';
       expectedWordCount?: number;
       recVariantCount?: number;
+      wordlistHint?: 'bip39' | 'slip39';
     }
   ) => runPaddleOcrEn(payload)
 );

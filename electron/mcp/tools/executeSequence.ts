@@ -28,6 +28,7 @@ import {
   getPageAction,
   getSequence,
   normalizeDeviceTestSetId,
+  type DeviceTestSetId,
 } from '../sequenceSets';
 import { resolvePageActionStepsForDevice } from '../sequenceSetResolver';
 import { saveCaptureToDownloads } from '../../saveCapture';
@@ -90,6 +91,7 @@ function requiresPostSequenceCooldown(sequence: { category: string; actions: str
 async function executeStep(
   step: AutoStep,
   resourceHandle: number,
+  deviceTestSetId: DeviceTestSetId,
   httpRequest: (url: string) => Promise<string>
 ): Promise<void> {
   if ((step.delayBefore ?? 0) > 0) {
@@ -114,7 +116,10 @@ async function executeStep(
     // Give the device screen time to finish inertial scrolling before capture.
     await delay(1600);
 
-    const ocrResult = await runMnemonicOcr(ocrCaptureConfig);
+    const ocrResult = await runMnemonicOcr({
+      ...ocrCaptureConfig,
+      deviceTestSetId,
+    });
     if (!ocrResult) {
       throw new Error('Renderer did not return mnemonic OCR result');
     }
@@ -327,7 +332,7 @@ export async function executeExecuteSequence(
           };
         }
 
-        await executeStep(step, state.resourceHandle, httpRequest);
+        await executeStep(step, state.resourceHandle, deviceTestSetId, httpRequest);
         stepsCompleted++;
         console.log(`[execute-sequence] Step ${stepsCompleted}/${totalSteps}: ${step.label}`);
       }

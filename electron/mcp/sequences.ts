@@ -316,12 +316,13 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     name: '输入PIN码1111',
     group: '初始设置',
     steps: [
-      { label: '输入PIN码1', x: 25, y: 50, depth: 12 },
+      // Wait for the PIN pad to finish rendering before the first tap.
+      { label: '输入PIN码1', x: 25, y: 50, depth: 12, delayBefore: 500 },
       { label: '输入PIN码2', x: 25, y: 50, depth: 12 },
       { label: '输入PIN码3', x: 25, y: 50, depth: 12 },
       { label: '输入PIN码4', x: 25, y: 50, depth: 12 },
       { label: '点击确认', x: 55, y: 85, depth: 12 },
-      { label: '再次确认PIN码1', x: 25, y: 50, depth: 12 },
+      { label: '再次确认PIN码1', x: 25, y: 50, depth: 12, delayBefore: 500 },
       { label: '再次确认PIN码2', x: 25, y: 50, depth: 12 },
       { label: '再次确认PIN码3', x: 25, y: 50, depth: 12 },
       { label: '再次确认PIN码4', x: 25, y: 50, depth: 12 },

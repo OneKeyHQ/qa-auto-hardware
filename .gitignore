@@ -75,3 +75,5 @@ scripts/.venv/
 mnemonics.local.json
 
 ./claude/worktrees/*
+# Python bytecode
+scripts/__pycache__/

@@ -73,9 +73,10 @@ echo "⬇️   Installing OCR dependencies (this may take a few minutes)..."
 # ── Smoke-test the install ────────────────────────────────────────────────────
 echo "🧪  Verifying installation..."
 "$VENV_PYTHON" -c "
-import paddle, cv2, numpy, PIL, yaml, paddleocr
+import paddle, cv2, numpy, PIL, yaml, paddleocr, onnxruntime
 print(f'  paddle     {paddle.__version__}')
 print(f'  paddleocr  {paddleocr.__version__}')
+print(f'  onnxruntime {onnxruntime.__version__}')
 print(f'  cv2        {cv2.__version__}')
 print(f'  numpy      {numpy.__version__}')
 print(f'  Pillow     {PIL.__version__}')
