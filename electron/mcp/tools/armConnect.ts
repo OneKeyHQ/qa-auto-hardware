@@ -19,11 +19,11 @@ export const armConnectSchema = z.object({
   serverIP: z
     .string()
     .optional()
-    .describe('Server IP address (default: 192.168.5.106)'),
+    .describe('Server IP address (default: 192.168.6.80)'),
   comPort: z
     .string()
     .optional()
-    .describe('COM port (default: COM3)'),
+    .describe('COM port (default: COM5)'),
 });
 
 export type ArmConnectInput = z.infer<typeof armConnectSchema>;

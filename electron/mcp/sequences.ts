@@ -47,6 +47,12 @@ export interface AutoStep {
   /** If set, performs verification OCR and clicks the correct option */
   ocrVerify?: {
     options: { x: number; y: number; depth: number }[];
+    /**
+     * Loop mode: keep answering questions until none are detected.
+     * Recovers from the device's "助记词不正确" error page by tapping
+     * 重试 -> 验证 and re-entering the verification round.
+     */
+    loop?: boolean;
   };
 }
 
