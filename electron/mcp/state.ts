@@ -23,9 +23,9 @@ export interface ArmState {
 
 /** Default arm controller configuration */
 export const ARM_CONFIG = {
-  defaultServerIP: '192.168.5.106',
+  defaultServerIP: '192.168.6.80',
   apiPort: '8082',
-  defaultComPort: 'COM3',
+  defaultComPort: 'COM5',
   apiPath: '/MyWcfService/getstring',
   deviceReadyDelay: 2000,
   commandDelay: 300,
@@ -164,11 +164,24 @@ export function getArmState(): Readonly<ArmState> {
   return { ...armState };
 }
 
+/** Listener invoked whenever armState changes (used to push state to renderer UI). */
+type ArmStateChangeListener = (state: Readonly<ArmState>) => void;
+let armStateChangeListener: ArmStateChangeListener | null = null;
+
+export function setArmStateChangeListener(listener: ArmStateChangeListener | null): void {
+  armStateChangeListener = listener;
+}
+
+function notifyArmStateChanged(): void {
+  armStateChangeListener?.({ ...armState });
+}
+
 /**
  * Updates the arm state with partial values.
  */
 export function updateArmState(updates: Partial<ArmState>): void {
   armState = { ...armState, ...updates };
+  notifyArmStateChanged();
 }
 
 /**
@@ -184,6 +197,7 @@ export function resetArmState(): void {
     currentY: 0,
     zDepth: ARM_CONFIG.defaultZDepth,
   };
+  notifyArmStateChanged();
 }
 
 /**

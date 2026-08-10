@@ -156,6 +156,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
     zDepth?: number;
   }) => ipcRenderer.invoke('sync-arm-state', state),
 
+  // Listen for arm state pushed from main process (e.g. MCP-side connect/disconnect)
+  onArmStateChanged: (callback: (state: {
+    isConnected: boolean;
+    resourceHandle: number;
+    serverIP: string;
+    comPort: string;
+    currentX: number;
+    currentY: number;
+    zDepth: number;
+  }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, state: Parameters<typeof callback>[0]) => callback(state);
+    ipcRenderer.on('arm-state-changed', handler);
+    return () => {
+      ipcRenderer.removeListener('arm-state-changed', handler);
+    };
+  },
+
   // MCP Frame capture: Listen for capture requests from main process
   onCaptureFrameRequest: (callback: () => void) => {
     const handler = () => callback();

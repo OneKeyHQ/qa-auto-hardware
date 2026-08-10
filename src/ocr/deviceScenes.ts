@@ -78,6 +78,27 @@ export const PRO2_OCR_SCENES = {
       scale: 5,
       useNearestNeighbor: true,
     },
+    // 18-word page (pro-style single capture): after the scroll-10 the title
+    // collapses and all 9 grid rows fit the viewport; span the whole list.
+    mnemonic18: {
+      roi: { x: 250, y: 600, width: 620, height: 920 },
+      scale: 5,
+      useNearestNeighbor: true,
+    },
+    // 24-word page is captured in two passes. Part1 (unscrolled): rows below
+    // the 准备备份 subtitle (row1 y≈900) down to just above the 备份 button
+    // (y≈1500). Part2 (after scroll): rows shift up; span the whole list
+    // viewport to absorb scroll-position variance between runs.
+    mnemonic24Part1: {
+      roi: { x: 250, y: 830, width: 620, height: 680 },
+      scale: 5,
+      useNearestNeighbor: true,
+    },
+    mnemonic24Part2: {
+      roi: { x: 250, y: 580, width: 620, height: 940 },
+      scale: 5,
+      useNearestNeighbor: true,
+    },
   },
   verifyWallet: {
     number: {

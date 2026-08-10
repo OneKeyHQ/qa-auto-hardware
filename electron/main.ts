@@ -3,6 +3,7 @@ import path from 'path';
 import { QAAutoHardwareMcpServer } from './mcp';
 import { runPaddleOcrEn, stopPaddleOcrEnDaemon } from './paddleOcrEn';
 import {
+  setArmStateChangeListener,
   setFrameCaptureCallback,
   setMcpLogCallback,
   setPreOcrCaptureCallback,
@@ -38,6 +39,12 @@ process.env.VITE_PUBLIC = app.isPackaged
 
 let mainWindow: BrowserWindow | null = null;
 let mcpServer: QAAutoHardwareMcpServer | null = null;
+
+// Push arm state changes (from either MCP or UI connections) to the renderer
+// so the web UI always reflects the real connection status.
+setArmStateChangeListener((state) => {
+  mainWindow?.webContents.send('arm-state-changed', state);
+});
 
 /** Pending frame capture resolve function */
 let pendingFrameResolve: ((frame: string | null) => void) | null = null;
@@ -467,6 +474,20 @@ async function startMcpServer(): Promise<void> {
   // Create and start MCP server
   mcpServer = new QAAutoHardwareMcpServer(httpRequest);
   const port = await mcpServer.start();
+
+  // Warm up the OCR daemon in the background so the first real recognition
+  // doesn't pay the model cold-start cost (can exceed the sequence OCR timeout).
+  void (async () => {
+    const blankPng =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const startedAt = Date.now();
+    try {
+      await runPaddleOcrEn({ imageDataUrl: blankPng, layoutHint: 'generic' });
+      console.log(`[paddleOcrEn] warmup done in ${Date.now() - startedAt}ms`);
+    } catch (err) {
+      console.warn('[paddleOcrEn] warmup failed:', err instanceof Error ? err.message : err);
+    }
+  })();
 
   // Notify renderer when MCP server is ready
   if (mainWindow) {

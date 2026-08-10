@@ -4,11 +4,11 @@
  */
 export const ARM_CONTROLLER_CONFIG = {
   /** Default server IP address */
-  defaultServerIP: '192.168.5.106',
+  defaultServerIP: '192.168.6.80',
   /** API service port */
   apiPort: '8082',
   /** Default COM port */
-  defaultComPort: 'COM3',
+  defaultComPort: 'COM5',
   /** API endpoint path */
   apiPath: '/MyWcfService/getstring',
   /** Delay after connection for device to be ready (ms) */

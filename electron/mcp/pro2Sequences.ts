@@ -45,6 +45,8 @@ export interface AutoStep {
   /** If set, performs verification OCR and clicks the correct option */
   ocrVerify?: {
     options: { x: number; y: number; depth: number }[];
+    /** Loop mode: answer questions until none detected; auto-recover from 助记词不正确 error page. */
+    loop?: boolean;
   };
 }
 
@@ -83,11 +85,11 @@ export const LETTER_COORDS: Record<string, { x: number; y: number }> = {
   q: { x: 192, y: 75 }, w: { x: 197, y: 75 }, e: { x: 202, y: 75 }, r: { x: 206, y: 75 },
   t: { x: 210, y: 75 }, y: { x: 215, y: 75 }, u: { x: 220, y: 75 }, i: { x: 224, y: 75 },
   o: { x: 228, y: 75 }, p: { x: 232, y: 75 },
-  a: { x: 194, y: 82 }, s: { x: 199, y: 82 }, d: { x: 203, y: 82 }, f: { x: 208, y: 82 },
+  a: { x: 194, y: 82 }, s: { x: 199, y: 82 }, d: { x: 203, y: 82 }, f: { x: 207, y: 83 },
   g: { x: 212, y: 82 }, h: { x: 217, y: 82 }, j: { x: 222, y: 82 }, k: { x: 227, y: 82 },
   l: { x: 231, y: 82 },
   z: { x: 198, y: 91 }, x: { x: 203, y: 91 }, c: { x: 208, y: 91 }, v: { x: 213, y: 91 },
-  b: { x: 218, y: 91 }, n: { x: 222, y: 91 }, m: { x: 226, y: 91 },
+  b: { x: 218, y: 91 }, n: { x: 221, y: 91 }, m: { x: 226, y: 91 },
 };
 
 /** Number coordinates on PIN pad */
@@ -315,7 +317,7 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     steps: [
       { label: '点击Hello', x: 215, y: 65, depth: 12, delayAfter: 300 },
       { label: '引导选择语言1', x: 212, y: 66, depth: 12, delayAfter: 300 },
-      { label: '引导选择语言2', x: 207, y: 73, depth: 12, delayAfter: 5000 },
+      { label: '引导选择语言2', x: 207, y: 73, depth: 12, delayAfter: 8000 },
       { label: '引导选择语言3', x: 213, y: 80, depth: 12, delayAfter: 300 },
       { label: '引导继续1', x: 202, y: 94, depth: 12, delayAfter: 300 },
       { label: '引导继续2', x: 202, y: 94, depth: 12, delayAfter: 300 },
@@ -410,8 +412,17 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     name: '选择20个单词',
     group: '词数选择',
     steps: [
-      { label: '选择20个单词', x: 25, y: 70, depth: 12 },
-      { label: '点击继续', x: 55, y: 85, depth: 12 },
+      // 20/33 词选项在列表底部，需先上滑到底才能看到
+      {
+        label: '词数列表上滑',
+        x: 213, y: 85, depth: 12,
+        swipeTo: { x: 213, y: 65 },
+        swipeSegments: 1,
+        swipeHoldDelay: 300,
+        delayAfter: 1000,
+      },
+      { label: '选择20个单词', x: 197, y: 84, depth: 12, delayAfter: 600 },
+      { label: '点击继续', x: 212, y: 94, depth: 12 },
     ],
   },
   {
@@ -428,8 +439,17 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     name: '选择33个单词',
     group: '词数选择',
     steps: [
-      { label: '选择33个单词', x: 25, y: 90, depth: 12 },
-      { label: '点击继续', x: 55, y: 85, depth: 12 },
+      // 20/33 词选项在列表底部，需先上滑到底才能看到
+      {
+        label: '词数列表上滑',
+        x: 213, y: 85, depth: 12,
+        swipeTo: { x: 213, y: 65 },
+        swipeSegments: 1,
+        swipeHoldDelay: 300,
+        delayAfter: 1000,
+      },
+      { label: '选择33个单词', x: 197, y: 94, depth: 12, delayAfter: 600 },
+      { label: '点击继续', x: 212, y: 94, depth: 12 },
     ],
   },
 
@@ -448,12 +468,30 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     ],
   },
   {
+    id: 'create-generate-intros',
+    name: '生成助记词介绍页(继续x2+备份)',
+    group: '创建钱包',
+    steps: [
+      // 选完位数后依次出现: 设备生成助记词介绍 -> 助记词保密提示 -> 准备记录
+      { label: '介绍页继续1', x: 212, y: 94, depth: 12, delayAfter: 1200 },
+      { label: '介绍页继续2', x: 212, y: 94, depth: 12, delayAfter: 1200 },
+      { label: '点击备份', x: 212, y: 94, depth: 12, delayAfter: 1500 },
+    ],
+  },
+  {
+    id: 'create-more-options',
+    name: '创建/导入选择页点击更多',
+    group: '创建钱包',
+    steps: [
+      { label: '点击更多', x: 229, y: 31, depth: 12, delayAfter: 1000 },
+    ],
+  },
+  {
     id: 'create-select-18-words',
     name: '创建钱包选择18词',
     group: '创建钱包',
     steps: [
-      { label: '展开助记词位数', x: 56, y: 23, depth: 12, delayAfter: 600 },
-      { label: '选择18词', x: 40, y: 55, depth: 12, delayAfter: 800 },
+      { label: '选择18位助记词', x: 196, y: 69, depth: 12, delayAfter: 1000 },
     ],
   },
   {
@@ -461,8 +499,7 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     name: '创建钱包选择24词',
     group: '创建钱包',
     steps: [
-      { label: '展开助记词位数', x: 56, y: 23, depth: 12, delayAfter: 600 },
-      { label: '选择24词', x: 40, y: 65, depth: 12, delayAfter: 800 },
+      { label: '选择24位助记词', x: 196, y: 79, depth: 12, delayAfter: 1000 },
     ],
   },
   {
@@ -470,7 +507,25 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     name: '创建钱包展开助记词选项',
     group: '创建钱包',
     steps: [
-      { label: '展开助记词位数', x: 56, y: 23, depth: 12, delayAfter: 600 },
+      { label: '点击更多', x: 229, y: 31, depth: 12, delayAfter: 1000 },
+    ],
+  },
+  {
+    id: 'create-more-options-scroll',
+    name: '更多选项页上滑',
+    group: '创建钱包',
+    steps: [
+      {
+        label: '更多选项页上滑',
+        x: 196,
+        y: 87,
+        depth: 12,
+        swipeTo: { x: 196, y: 47 },
+        swipeSegments: 5,
+        swipeSegmentDelay: 45,
+        swipeHoldDelay: 220,
+        delayAfter: 1400,
+      },
     ],
   },
   {
@@ -479,13 +534,15 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     group: '创建钱包',
     steps: [
       {
-        label: '助记词页上滑10',
-        x: 50,
-        y: 78,
+        // 实测参数(滑动调试面板校准): 上滑15格后18词9行可稳定全显
+        label: '助记词页上滑15',
+        x: 213,
+        y: 85,
         depth: 12,
-        swipeTo: { x: 50, y: 68 },
-        swipeHoldDelay: 120,
-        delayAfter: 1200,
+        swipeTo: { x: 213, y: 70 },
+        swipeSegments: 1,
+        swipeHoldDelay: 300,
+        delayAfter: 1800,
       },
     ],
   },
@@ -513,16 +570,16 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     group: '创建钱包',
     steps: [
       {
-        // Use a larger, slower swipe so the second OCR pass reliably reveals words 9/10 and 19/20.
+        // 20词(10行)同样一屏放不下：一段式大幅滑到底（列表末尾夹停），
+        // 与第一段(未滑动)合并后覆盖全部20词
         label: 'SLIP39助记词页上滑15(慢速)',
-        x: 50,
-        y: 78,
+        x: 213,
+        y: 85,
         depth: 12,
-        swipeTo: { x: 50, y: 50 },
-        swipeSegments: 12,
-        swipeSegmentDelay: 110,
-        swipeHoldDelay: 420,
-        delayAfter: 2600,
+        swipeTo: { x: 213, y: 45 },
+        swipeSegments: 1,
+        swipeHoldDelay: 300,
+        delayAfter: 2200,
       },
     ],
   },
@@ -532,16 +589,16 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     group: '创建钱包',
     steps: [
       {
-        // Keep page overlap while reducing inertial scroll before the second OCR capture.
+        // 24词共12行：一段式大幅滑到底（列表末尾夹停，落点确定），
+        // 底部视图显示第4-12行，与第一段(1-7行)合并后覆盖全部24词
         label: '助记词页上滑20',
-        x: 50,
-        y: 78,
+        x: 213,
+        y: 85,
         depth: 12,
-        swipeTo: { x: 50, y: 50 },
-        swipeSegments: 10,
-        swipeSegmentDelay: 85,
-        swipeHoldDelay: 360,
-        delayAfter: 2000,
+        swipeTo: { x: 213, y: 45 },
+        swipeSegments: 1,
+        swipeHoldDelay: 300,
+        delayAfter: 2200,
       },
     ],
   },
@@ -582,7 +639,7 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     name: '创建SLIP39选择单份',
     group: '创建钱包',
     steps: [
-      { label: '选择单份助记词', x: 30, y: 45, depth: 12, delayAfter: 900 },
+      { label: '选择slip39单分片备份', x: 196, y: 49, depth: 12, delayAfter: 900 },
     ],
   },
   {
@@ -590,7 +647,7 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     name: '创建SLIP39选择多份',
     group: '创建钱包',
     steps: [
-      { label: '选择多份助记词', x: 30, y: 55, depth: 12, delayAfter: 900 },
+      { label: '选择slip39多分片备份', x: 196, y: 59, depth: 12, delayAfter: 900 },
     ],
   },
   {
@@ -598,7 +655,7 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     name: 'SLIP39份额选择2',
     group: '创建钱包',
     steps: [
-      { label: '选择2份额', x: 20, y: 35, depth: 12, delayAfter: 700 },
+      { label: '选择2份额', x: 195, y: 48, depth: 12, delayAfter: 700 },
     ],
   },
   {
@@ -606,7 +663,7 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     name: 'SLIP39份额选择8',
     group: '创建钱包',
     steps: [
-      { label: '选择8份额', x: 29, y: 44, depth: 12, delayAfter: 700 },
+      { label: '选择8份额', x: 204, y: 57, depth: 12, delayAfter: 700 },
     ],
   },
   {
@@ -614,7 +671,7 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     name: 'SLIP39份额选择16',
     group: '创建钱包',
     steps: [
-      { label: '选择16份额', x: 55, y: 53, depth: 12, delayAfter: 700 },
+      { label: '选择16份额', x: 228, y: 64, depth: 12, delayAfter: 700 },
     ],
   },
   {
@@ -622,7 +679,7 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     name: 'SLIP39阈值选择2',
     group: '创建钱包',
     steps: [
-      { label: '选择2阈值', x: 20, y: 68, depth: 12, delayAfter: 700 },
+      { label: '选择2阈值', x: 196, y: 83, depth: 12, delayAfter: 700 },
     ],
   },
   {
@@ -630,7 +687,19 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     name: 'SLIP39阈值选择8',
     group: '创建钱包',
     steps: [
-      { label: '选择8阈值', x: 29, y: 77, depth: 12, delayAfter: 700 },
+      // 选8份额后阈值选项超出屏幕，需要先上滑露出"8"再点击
+      {
+        label: '阈值区上滑',
+        x: 204,
+        y: 73,
+        depth: 12,
+        swipeTo: { x: 204, y: 53 },
+        swipeSegments: 5,
+        swipeSegmentDelay: 45,
+        swipeHoldDelay: 220,
+        delayAfter: 1200,
+      },
+      { label: '选择8阈值', x: 204, y: 80, depth: 12, delayAfter: 700 },
     ],
   },
   {
@@ -638,7 +707,7 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     name: 'SLIP39配置确认继续',
     group: '创建钱包',
     steps: [
-      { label: '确认配置并继续', x: 55, y: 85, depth: 12, delayAfter: 900 },
+      { label: '确认配置并继续', x: 212, y: 94, depth: 12, delayAfter: 900 },
     ],
   },
   {
@@ -671,16 +740,45 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     ],
   },
   {
-    id: 'create-screenshot-18',
-    name: '截图识别(18词)',
+    id: 'create-screenshot-18-part1',
+    name: '截图识别(18词-第一页)',
     group: '创建钱包',
     steps: [
       {
-        label: '移动到截图位置',
-        x: 85,
+        // pro2 视口只容纳约8行，18词(9行)无法一屏全显：先在未滑动状态
+        // 抓取第1-7/10-16行（关键是第1、10词），滑动到底后再抓其余
+        label: '移动到截图位置(18词-1)',
+        x: 259,
         y: 0,
         depth: 12,
-        ocrCapture: { expectedWordCount: 18, requireBip39: true },
+        ocrCapture: {
+          expectedWordCount: 18,
+          mergeWithStored: true,
+          allowPartial: true,
+          requireBip39: false,
+          sceneConfig: PRO2_OCR_SCENES.createWallet.mnemonic24Part1,
+        },
+        delayAfter: 2000,
+      },
+    ],
+  },
+  {
+    id: 'create-screenshot-18-part2',
+    name: '截图识别(18词-第二页)',
+    group: '创建钱包',
+    steps: [
+      {
+        label: '移动到截图位置(18词-2)',
+        x: 259,
+        y: 0,
+        depth: 12,
+        ocrCapture: {
+          expectedWordCount: 18,
+          mergeWithStored: true,
+          allowPartial: false,
+          requireBip39: true,
+          sceneConfig: PRO2_OCR_SCENES.createWallet.mnemonic24Part2,
+        },
         delayAfter: 2000,
       },
     ],
@@ -707,7 +805,7 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     steps: [
       {
         label: '移动到截图位置(20词-1)',
-        x: 85,
+        x: 259,
         y: 0,
         depth: 12,
         ocrCapture: {
@@ -715,6 +813,7 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
           mergeWithStored: true,
           allowPartial: true,
           requireBip39: false,
+          sceneConfig: PRO2_OCR_SCENES.createWallet.mnemonic24Part1,
         },
         delayAfter: 2000,
       },
@@ -727,7 +826,7 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     steps: [
       {
         label: '移动到截图位置(20词-2)',
-        x: 85,
+        x: 259,
         y: 0,
         depth: 12,
         ocrCapture: {
@@ -735,6 +834,7 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
           mergeWithStored: true,
           allowPartial: false,
           requireBip39: false,
+          sceneConfig: PRO2_OCR_SCENES.createWallet.mnemonic24Part2,
         },
         delayAfter: 2000,
       },
@@ -747,7 +847,7 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     steps: [
       {
         label: '移动到截图位置(24词-1)',
-        x: 85,
+        x: 259,
         y: 0,
         depth: 12,
         ocrCapture: {
@@ -755,6 +855,7 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
           mergeWithStored: true,
           allowPartial: true,
           requireBip39: false,
+          sceneConfig: PRO2_OCR_SCENES.createWallet.mnemonic24Part1,
         },
         delayAfter: 2000,
       },
@@ -767,7 +868,7 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     steps: [
       {
         label: '移动到截图位置(24词-2)',
-        x: 85,
+        x: 259,
         y: 0,
         depth: 12,
         ocrCapture: {
@@ -775,6 +876,7 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
           mergeWithStored: true,
           allowPartial: false,
           requireBip39: true,
+          sceneConfig: PRO2_OCR_SCENES.createWallet.mnemonic24Part2,
         },
         delayAfter: 2000,
       },
@@ -786,7 +888,8 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     group: '创建钱包',
     steps: [
       { label: '点击继续', x: 212, y: 94, depth: 12 },
-      { label: '开始核对', x: 214, y: 82, depth: 12 },
+      // 备份确认弹层(验证/再次显示)出现需要约1秒，必须等它渲染完成再点验证
+      { label: '开始核对', x: 214, y: 82, depth: 12, delayBefore: 1500 },
     ],
   },
   {
@@ -809,8 +912,45 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     ],
   },
   {
+    id: 'create-verify-words',
+    name: '验证单词(循环+自动重试)',
+    group: '创建钱包',
+    steps: [
+      {
+        // 循环答题直到不再出现验证题；遇到"助记词不正确"错误页
+        // 自动点击 重试->验证 重新进入验证轮次
+        label: '验证单词循环',
+        x: 259, y: 0, depth: 12,
+        ocrVerify: {
+          loop: true,
+          options: [
+            { x: 213, y: 72, depth: 12 },
+            { x: 213, y: 82, depth: 12 },
+            { x: 213, y: 94, depth: 12 },
+          ],
+        },
+        delayAfter: 2000,
+      },
+    ],
+  },
+  {
     id: 'create-final-continue-and-reset',
     name: '确认后继续并复位',
+    group: '创建钱包',
+    steps: [
+      { label: '点击继续1', x: 212, y: 94, depth: 12, delayAfter: 600 },
+      { label: '点击继续2', x: 212, y: 94, depth: 12, delayAfter: 600 },
+      { label: '点击继续3', x: 212, y: 94, depth: 12, delayAfter: 600 },
+      { label: '点击继续4', x: 212, y: 94, depth: 12, delayAfter: 800 },
+      // pro2 验证完成后有"备份验证"选择页(仅 PIN / 助记词)，选中间行的"仅 PIN"
+      { label: '备份验证-仅PIN', x: 213, y: 82, depth: 12, delayBefore: 1000, delayAfter: 1500 },
+      { label: '复位', x: DEVICE_HOME_COORD.x, y: DEVICE_HOME_COORD.y, depth: 12 },
+    ],
+  },
+  {
+    // SLIP39 收尾：所有分片验证完成后没有"仅 PIN"备份验证选择页，直接继续到主页
+    id: 'create-slip39-final-continue-and-reset',
+    name: 'SLIP39确认后继续并复位',
     group: '创建钱包',
     steps: [
       { label: '点击继续1', x: 212, y: 94, depth: 12, delayAfter: 600 },
@@ -825,7 +965,7 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     name: 'SLIP39当前份额确认',
     group: '创建钱包',
     steps: [
-      { label: '点击确认', x: 45, y: 85, depth: 12, delayBefore: 2000, delayAfter: 2000 },
+      { label: '点击确认', x: 212, y: 94, depth: 12, delayBefore: 2000, delayAfter: 2000 },
     ],
   },
   {
@@ -961,14 +1101,14 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
   },
   {
     id: 'input-slip39-33-2-all',
-    name: 'slip39-33词-3/2 输入',
+    name: 'slip39-33词-2/3(输入2份) 输入',
     group: '助记词输入',
     steps: [],
     mnemonicSource: {
+      // 2-of-3：只提供了恢复所需的 2 份分片，按顺序全部输入
       section: 'slip39',
-      keys: ['slip39_33_2_share1', 'slip39_33_2_share2', 'slip39_33_2_share3'],
-      mode: 'shares-random',
-      pickCount: 2,
+      keys: ['slip39_33_2_share1', 'slip39_33_2_share2'],
+      mode: 'shares-all',
     },
   },
 
@@ -1004,49 +1144,70 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
   // 设备管理 (Device Management)
   // --------------------------------------------------------------------------
   {
-    id: 'reset-wallet-action',
-    name: '重置钱包流程',
+    id: 'reset-wallet-unlock-action',
+    name: '解锁设备(点亮+PIN 1111)',
     group: '设备管理',
     steps: [
-      // Wake up password keyboard (single click is enough)
-      { label: 'Wake keyboard', x: DEVICE_BUTTONS.confirm.x, y: DEVICE_BUTTONS.confirm.y, depth: 12, delayAfter: 1000 },
-      // Enter PIN 1111
+      // 第一步：双击点亮屏幕。熄屏状态下单击常无法唤醒，需连续两次点击；
+      // 点在标题安全区，若屏幕本就亮着也不会误触
+      { label: '点亮屏幕1', x: 213, y: 45, depth: 12, delayAfter: 500 },
+      { label: '点亮屏幕2', x: 213, y: 45, depth: 12, delayAfter: 1500 },
+      // 第二步：锁屏页点击"点击解锁"，弹出 PIN 键盘
+      { label: '点击解锁', x: 212, y: 92, depth: 12, delayAfter: 1800 },
+      // 第三步：输入 PIN 1111
       { label: 'PIN 1', x: NUMBER_COORDS['1'].x, y: NUMBER_COORDS['1'].y, depth: 12 },
       { label: 'PIN 2', x: NUMBER_COORDS['1'].x, y: NUMBER_COORDS['1'].y, depth: 12 },
       { label: 'PIN 3', x: NUMBER_COORDS['1'].x, y: NUMBER_COORDS['1'].y, depth: 12 },
       { label: 'PIN 4', x: NUMBER_COORDS['1'].x, y: NUMBER_COORDS['1'].y, depth: 12 },
-      { label: 'Confirm', x: DEVICE_BUTTONS.confirm.x, y: DEVICE_BUTTONS.confirm.y, depth: 12, delayAfter: 2000 },
-      // Enter reset flow
-      { label: '点击设置入口', x: 222, y: 75, depth: 12, delayAfter: 800 },
-      { label: '点击钱包项', x: 202, y: 59, depth: 12, delayAfter: 800 },
-      // Wallet 页面列表向上滑动一段距离后，点击重置按钮
+      { label: 'Confirm', x: DEVICE_BUTTONS.confirm.x, y: DEVICE_BUTTONS.confirm.y, depth: 12, delayAfter: 2500 },
+    ],
+  },
+  {
+    id: 'reset-wallet-nav-action',
+    name: '重置钱包流程(导航+重置)',
+    group: '设备管理',
+    steps: [
+      // Enter reset flow from unlocked home (坐标经滑动调试面板实测校准)
       {
-        label: '滑动钱包列表',
-        x: 206,
-        y: 95,
+        label: '主页左滑进入面板',
+        x: 225,
+        y: 85,
         depth: 12,
-        swipeTo: { x: 206, y: 35 },
-        swipeSegments: 2,
-        swipeSegmentDelay: 40,
+        swipeTo: { x: 195, y: 85 },
+        swipeSegments: 1,
         swipeHoldDelay: 300,
         delayBefore: 500,
-        delayAfter: 1400,
+        delayAfter: 1000,
       },
-      { label: '点击重置按钮', x: 206, y: 92, depth: 12, delayAfter: 600 },
-      { label: '确认重置入口', x: 222, y: 67, depth: 12, delayAfter: 2000 },
-      { label: '确认选项1', x: 196, y: 54, depth: 12, delayAfter: 800 },
-      { label: '确认选项2', x: 196, y: 67, depth: 12, delayAfter: 900 },
+      { label: '点击设置', x: 225, y: 60, depth: 12, delayAfter: 800 },
+      { label: '点击钱包', x: 199, y: 60, depth: 12, delayAfter: 800 },
+      {
+        label: '钱包页上滑',
+        x: 225,
+        y: 85,
+        depth: 12,
+        swipeTo: { x: 225, y: 50 },
+        swipeSegments: 1,
+        swipeHoldDelay: 300,
+        delayAfter: 1000,
+      },
+      { label: '点击重置', x: 205, y: 93, depth: 12, delayAfter: 800 },
+      { label: '二次确认重置', x: 223, y: 70, depth: 12, delayAfter: 1000 },
+      { label: '勾选点击1', x: 196, y: 54, depth: 12, delayAfter: 600 },
+      { label: '勾选点击2', x: 196, y: 64, depth: 12, delayAfter: 800 },
       {
         label: '滑动确认重置',
-        x: 196,
-        y: 91,
+        x: 195,
+        y: 95,
         depth: 12,
-        swipeTo: { x: 231, y: 91 },
-        swipeSegments: 2,
-        swipeSegmentDelay: 40,
-        swipeHoldDelay: 900,
-        delayAfter: 10000,
+        swipeTo: { x: 225, y: 95 },
+        swipeSegments: 1,
+        swipeHoldDelay: 300,
+        // 擦除数据需要数秒，等"重置完成"页渲染出来再点重启
+        delayAfter: 5000,
       },
+      // 重置完成页点击重启，等待设备重启完成
+      { label: '点击重启', x: 212, y: 94, depth: 12, delayBefore: 1000, delayAfter: 10000 },
       // 复位机械臂：还原到 home 坐标
       { label: '复位', x: DEVICE_HOME_COORD.x, y: DEVICE_HOME_COORD.y, depth: 12 },
     ],
@@ -1111,50 +1272,43 @@ const IMPORT_PREFIX: string[] = [
 const CREATE_PREFIX: string[] = [
   'create-start-position', 'lang-zh', 'pin-1111', 'nav-continue-setup', 'nav-create',
 ];
-/** Create 18/24 wallet prefix: already on create page, do not click "创建新钱包". */
-const CREATE_PREFIX_DIRECT_EXPAND: string[] = [
-  'lang-zh', 'pin-1111', 'nav-continue-setup',
+/** Create 18/24/SLIP39 prefix: on the create/import selection page open the "更多" options sheet. */
+const CREATE_PREFIX_MORE_OPTIONS: string[] = [
+  'create-start-position', 'lang-zh', 'pin-1111', 'nav-continue-setup', 'create-more-options',
 ];
 const CREATE_FLOW_SUFFIX: string[] = [
   'create-screenshot-12',
   'create-continue',
-  'create-verify-word',
-  'create-verify-word',
-  'create-verify-word',
+  'create-verify-words',
   'create-final-continue-and-reset',
 ];
 const CREATE_FLOW_SUFFIX_18: string[] = [
-  'create-backup-confirm',
+  'create-generate-intros',
+  'create-screenshot-18-part1',
   'create-mnemonic-scroll-10',
-  'create-screenshot-18',
+  'create-screenshot-18-part2',
   'create-continue',
-  'create-verify-word',
-  'create-verify-word',
-  'create-verify-word',
+  'create-verify-words',
   'create-final-continue-and-reset',
 ];
 const CREATE_FLOW_SUFFIX_24: string[] = [
-  'create-backup-confirm',
+  'create-generate-intros',
   'create-screenshot-24-part1',
   'create-mnemonic-scroll-20',
   'create-screenshot-24-part2',
   'create-continue',
-  'create-verify-word',
-  'create-verify-word',
-  'create-verify-word',
+  'create-verify-words',
   'create-final-continue-and-reset',
 ];
 const CREATE_FLOW_SUFFIX_SLIP39_TEMPLATE: string[] = [
-  'create-backup-confirm',
+  'create-generate-intros',
 ];
 const CREATE_FLOW_SUFFIX_SLIP39_PER_SHARE: string[] = [
   'create-screenshot-20-part1',
   'create-slip39-mnemonic-scroll-15-slow',
   'create-screenshot-20-part2',
   'create-continue',
-  'create-verify-word',
-  'create-verify-word',
-  'create-verify-word',
+  'create-verify-words',
   'create-slip39-share-confirm',
 ];
 
@@ -1175,13 +1329,13 @@ const ALL_SEQUENCES: AutoSequence[] = [
     id: 'reset-wallet',
     name: '重置钱包',
     category: '设备管理',
-    actions: ['reset-wallet-action'],
+    actions: ['reset-wallet-nav-action'],
   },
   {
     id: 'reset-wallet-locked',
     name: '重置钱包(锁定态)',
     category: '设备管理',
-    actions: ['reset-wallet-action'],
+    actions: ['reset-wallet-unlock-action', 'reset-wallet-nav-action'],
   },
   {
     id: 'reset-wallet-unlocked',
@@ -1203,26 +1357,25 @@ const ALL_SEQUENCES: AutoSequence[] = [
     id: 'create-wallet-18',
     name: '创建新钱包(18词)',
     category: '创建钱包',
-    actions: [...CREATE_PREFIX_DIRECT_EXPAND, 'create-select-18-words', ...CREATE_FLOW_SUFFIX_18],
+    actions: [...CREATE_PREFIX_MORE_OPTIONS, 'create-select-18-words', ...CREATE_FLOW_SUFFIX_18],
   },
   {
     id: 'create-wallet-24',
     name: '创建新钱包(24词)',
     category: '创建钱包',
-    actions: [...CREATE_PREFIX_DIRECT_EXPAND, 'create-select-24-words', ...CREATE_FLOW_SUFFIX_24],
+    actions: [...CREATE_PREFIX_MORE_OPTIONS, 'create-select-24-words', ...CREATE_FLOW_SUFFIX_24],
   },
   {
     id: 'create-slip39-single-template',
     name: '创建SLIP39(单份模板)',
     category: '创建钱包',
     actions: [
-      ...CREATE_PREFIX_DIRECT_EXPAND,
-      'create-expand-word-options',
-      'create-slip39-scroll-large',
+      ...CREATE_PREFIX_MORE_OPTIONS,
+      'create-more-options-scroll',
       'create-slip39-select-single',
       ...CREATE_FLOW_SUFFIX_SLIP39_TEMPLATE,
       ...buildSlip39PerShareActions(1),
-      'create-final-continue-and-reset',
+      'create-slip39-final-continue-and-reset',
     ],
   },
   {
@@ -1230,16 +1383,15 @@ const ALL_SEQUENCES: AutoSequence[] = [
     name: '创建SLIP39(多份模板 2/2)',
     category: '创建钱包',
     actions: [
-      ...CREATE_PREFIX_DIRECT_EXPAND,
-      'create-expand-word-options',
-      'create-slip39-scroll-large',
+      ...CREATE_PREFIX_MORE_OPTIONS,
+      'create-more-options-scroll',
       'create-slip39-select-multi',
       'create-slip39-shares-2',
       'create-slip39-threshold-2',
       'create-slip39-config-continue',
       ...CREATE_FLOW_SUFFIX_SLIP39_TEMPLATE,
       ...buildSlip39PerShareActions(2),
-      'create-final-continue-and-reset',
+      'create-slip39-final-continue-and-reset',
     ],
   },
   {
@@ -1247,16 +1399,15 @@ const ALL_SEQUENCES: AutoSequence[] = [
     name: '创建SLIP39(多份模板 8/8)',
     category: '创建钱包',
     actions: [
-      ...CREATE_PREFIX_DIRECT_EXPAND,
-      'create-expand-word-options',
-      'create-slip39-scroll-large',
+      ...CREATE_PREFIX_MORE_OPTIONS,
+      'create-more-options-scroll',
       'create-slip39-select-multi',
       'create-slip39-shares-8',
       'create-slip39-threshold-8',
       'create-slip39-config-continue',
       ...CREATE_FLOW_SUFFIX_SLIP39_TEMPLATE,
       ...buildSlip39PerShareActions(8),
-      'create-final-continue-and-reset',
+      'create-slip39-final-continue-and-reset',
     ],
   },
   {
@@ -1264,16 +1415,15 @@ const ALL_SEQUENCES: AutoSequence[] = [
     name: '创建SLIP39(多份模板 16/2)',
     category: '创建钱包',
     actions: [
-      ...CREATE_PREFIX_DIRECT_EXPAND,
-      'create-expand-word-options',
-      'create-slip39-scroll-large',
+      ...CREATE_PREFIX_MORE_OPTIONS,
+      'create-more-options-scroll',
       'create-slip39-select-multi',
       'create-slip39-shares-16',
       'create-slip39-threshold-2',
       'create-slip39-config-continue',
       ...CREATE_FLOW_SUFFIX_SLIP39_TEMPLATE,
       ...buildSlip39PerShareActions(16),
-      'create-final-continue-and-reset',
+      'create-slip39-final-continue-and-reset',
     ],
   },
 
@@ -1398,6 +1548,12 @@ const SUPPORTED_PRO2_SEQUENCE_IDS = new Set<string>([
   'reset-wallet',
   'reset-wallet-locked',
   'create-wallet',
+  'create-wallet-18',
+  'create-wallet-24',
+  'create-slip39-single-template',
+  'create-slip39-multi-2of2-template',
+  'create-slip39-multi-8of8-template',
+  'create-slip39-multi-16of2-template',
   'words-12',
   'one-normal-12',
   'two-normal-12',
@@ -1409,6 +1565,10 @@ const SUPPORTED_PRO2_SEQUENCE_IDS = new Set<string>([
   'one-normal-24',
   'two-normal-24',
   'three-normal-24',
+  'count20_one_normal',
+  'count20_two_normal',
+  'count20_three_normal',
+  'count33_two_normal',
 ]);
 
 const VISIBLE_SEQUENCES: AutoSequence[] = ALL_SEQUENCES.filter((sequence) =>

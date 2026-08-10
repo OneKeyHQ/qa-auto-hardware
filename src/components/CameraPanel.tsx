@@ -925,13 +925,20 @@ function extractWordIndexFromText(text: string, maxIndex: number = 12): number {
  * Extracts up to 3 option words from verification options OCR text.
  * Prefers one token per line to preserve top-to-bottom click order.
  */
-function extractVerifyOptionWords(text: string, maxOptions: number = 3): string[] {
+function extractVerifyOptionWords(
+  text: string,
+  maxOptions: number = 3,
+  wordlistHint: 'bip39' | 'slip39' = 'bip39'
+): string[] {
   const normalizedLines = text
     .split(/\n+/)
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
 
-  const optionsFromLines: string[] = [];
+  const isWordlistWord = (word: string): boolean =>
+    wordlistHint === 'slip39' ? slip39English.includes(word) : bip39English.includes(word);
+
+  const lineTokens: string[] = [];
   for (const line of normalizedLines) {
     const tokens = (line.match(/[a-zA-Z]{2,16}/g) ?? [])
       .map((token) => token.toLowerCase().replace(/[^a-z]/g, ''))
@@ -940,12 +947,32 @@ function extractVerifyOptionWords(text: string, maxOptions: number = 3): string[
     const bestToken = tokens.reduce((longest, current) =>
       current.length > longest.length ? current : longest
     );
-    optionsFromLines.push(bestToken);
-    if (optionsFromLines.length >= maxOptions) {
-      return optionsFromLines;
-    }
+    lineTokens.push(bestToken);
   }
 
+  if (lineTokens.length >= maxOptions) {
+    // 幽灵检测框(如状态栏/题号区噪声)会排在真实选项前面，导致"列表位置"
+    // 与"屏幕行号"错位而点错行。真实选项一定是词表内合法词：
+    // 1) 合法词已够 maxOptions 个 -> 只取合法词（顺序即屏幕行序）
+    const validTokens = lineTokens.filter(isWordlistWord);
+    if (validTokens.length >= maxOptions) {
+      return validTokens.slice(0, maxOptions);
+    }
+    // 2) 合法词不足（真实选项被 OCR 拼错时保留原位置），仅在超出 maxOptions
+    //    时从前往后剔除非法词，避免噪声把真实选项挤出或挤错位
+    const trimmed = [...lineTokens];
+    for (let i = 0; i < trimmed.length && trimmed.length > maxOptions; ) {
+      if (!isWordlistWord(trimmed[i])) {
+        trimmed.splice(i, 1);
+      } else {
+        i++;
+      }
+    }
+    return trimmed.slice(0, maxOptions);
+  }
+
+  // 行数不足 maxOptions（选项被 OCR 合并到少数几行）时，落回整段文本按 token 切分，
+  // 尽量凑齐 maxOptions 个候选（顺序保持从上到下）。
   // Fallback to ordered tokens when line separation is poor.
   const orderedTokens = (text.match(/[a-zA-Z]{2,16}/g) ?? [])
     .map((token) => token.toLowerCase().replace(/[^a-z]/g, ''))
@@ -965,7 +992,9 @@ function extractVerifyOptionWords(text: string, maxOptions: number = 3): string[
  * Strict option mapping: exact match first, otherwise unique nearest mnemonic within small edit distance.
  */
 function mapOptionToMnemonicStrict(ocrWord: string, mnemonicWords: string[]): string | null {
-  if (mnemonicWords.includes(ocrWord)) return ocrWord;
+  // 设备固定显示小写；OCR 偶尔混入大写字母，匹配一律忽略大小写
+  const normalizedOcrWord = ocrWord.trim().toLowerCase();
+  if (mnemonicWords.includes(normalizedOcrWord)) return normalizedOcrWord;
   const uniqueMnemonicWords = Array.from(new Set(mnemonicWords));
 
   let bestWord: string | null = null;
@@ -973,7 +1002,7 @@ function mapOptionToMnemonicStrict(ocrWord: string, mnemonicWords: string[]): st
   let bestCount = 0;
 
   for (const mnemonicWord of uniqueMnemonicWords) {
-    const distance = levenshteinDistance(ocrWord, mnemonicWord);
+    const distance = levenshteinDistance(normalizedOcrWord, mnemonicWord.toLowerCase());
     if (distance < bestDistance) {
       bestDistance = distance;
       bestWord = mnemonicWord;
@@ -1585,7 +1614,7 @@ function CameraPanel() {
       });
       if (!result) continue;
 
-      const rawOptions = extractVerifyOptionWords(result.rawText, 3);
+      const rawOptions = extractVerifyOptionWords(result.rawText, 3, options?.wordlistHint ?? 'bip39');
       let score = rawOptions.length * 120 + result.confidence;
       const targetWord = options?.targetWord?.toLowerCase().trim();
       if (targetWord) {
@@ -3085,7 +3114,12 @@ function CameraPanel() {
           resultText += '\n-> 未找到匹配选项';
         }
 
-        const verifySuccess = hasStoredMnemonic && wordIndex >= 1 && optionIndex >= 0 && !!correctWord;
+        // 选项区固定3行，点击按"选项在列表中的下标"映射到3个固定屏幕坐标。
+        // 若只读到<3行，说明有一行漏读/两行粘连，此时下标→坐标的映射不可靠，
+        // 极易点错行（曾导致"助记词不正确"）。因此必须读满3行才允许点击，
+        // 否则判为坏帧、触发重拍。
+        const hasThreeOptions = rawOptions.length >= 3;
+        const verifySuccess = hasStoredMnemonic && wordIndex >= 1 && optionIndex >= 0 && !!correctWord && hasThreeOptions;
         const verifyReason = verifySuccess
           ? undefined
           : (
@@ -3097,6 +3131,8 @@ function CameraPanel() {
                   ? `Verification word index out of range: ${wordIndex}/${storedMnemonic.words.length}`
                 : rawOptions.length === 0
                   ? 'No option words recognized'
+                : !hasThreeOptions
+                  ? `Only ${rawOptions.length}/3 option rows recognized (retry): rawOptions="${rawOptions.join(', ')}"`
                   : `Correct word not found in detected options (wordIndex=${wordIndex}, targetWord="${correctWord || '(unknown)'}", rawOptions="${rawOptions.join(', ') || '(empty)'}", mappedOptions="${mappedOptions.join(', ') || '(empty)'}")`
           );
 

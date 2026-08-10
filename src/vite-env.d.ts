@@ -140,6 +140,16 @@ interface Window {
       currentY?: number;
       zDepth?: number;
     }) => Promise<void>;
+    // Arm state pushed from main process (e.g. MCP-side connect/disconnect)
+    onArmStateChanged: (callback: (state: {
+      isConnected: boolean;
+      resourceHandle: number;
+      serverIP: string;
+      comPort: string;
+      currentX: number;
+      currentY: number;
+      zDepth: number;
+    }) => void) => () => void;
     // MCP Frame capture
     onCaptureFrameRequest: (callback: () => void) => () => void;
     sendCaptureFrameResponse: (frame: string | null) => void;
