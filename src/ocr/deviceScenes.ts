@@ -25,6 +25,10 @@ export type DeviceOcrScenes = {
     readonly number?: SequenceOcrSceneConfig;
     readonly options?: SequenceOcrSceneConfig;
   };
+  /** 导入逐词校验：读取键盘输入框里当前显示的大字单词 */
+  readonly importField?: {
+    readonly word?: SequenceOcrSceneConfig;
+  };
 };
 
 export const PRO_OCR_SCENES = {
@@ -112,9 +116,20 @@ export const PRO2_OCR_SCENES = {
       useNearestNeighbor: false,
     },
   },
+  importField: {
+    // 键盘输入页顶部居中的大字单词区域（如 "fake"）。范围取宽以容纳长词，
+    // 上下只覆盖单行大字。⚠️ 需充电后真机校准 ROI。
+    word: {
+      roi: { x: 230, y: 745, width: 620, height: 175 },
+      scale: 5,
+      useNearestNeighbor: true,
+    },
+  },
 } as const satisfies DeviceOcrScenes;
 
-export const DEVICE_OCR_SCENES: Record<'pro' | 'pro2', DeviceOcrScenes> = {
+export const DEVICE_OCR_SCENES: Record<'pro' | 'pro2' | 'neo', DeviceOcrScenes> = {
   pro: PRO_OCR_SCENES,
   pro2: PRO2_OCR_SCENES,
+  // Neo 与 Pro2 屏幕/坐标一致，OCR 场景直接复用 Pro2
+  neo: PRO2_OCR_SCENES,
 };

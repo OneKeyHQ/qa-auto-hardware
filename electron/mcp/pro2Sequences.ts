@@ -48,6 +48,20 @@ export interface AutoStep {
     /** Loop mode: answer questions until none detected; auto-recover from 助记词不正确 error page. */
     loop?: boolean;
   };
+  /**
+   * 导入逐词校验：输完一词、点确认前，OCR 输入框大字与期望词比对；
+   * 不符则退格清空 + 重打该词、再校验，仍不符抛错并指明第几个词。
+   */
+  verifyWord?: {
+    /** 期望词 */
+    word: string;
+    /** 该词在整份助记词中的序号(1-based)，用于报错定位 */
+    wordIndex: number;
+    /** 重打该词所需的逐字母点击坐标 */
+    keys: { x: number; y: number }[];
+    /** 退格键坐标（清空错词用） */
+    backspace: { x: number; y: number };
+  };
 }
 
 /**
@@ -109,6 +123,9 @@ export const NUMBER_COORDS: Record<string, { x: number; y: number }> = {
 /** Confirm button coordinate */
 export const CONFIRM_COORD = { x: 196, y: 68 };
 
+/** 键盘退格键坐标（底排最右）。⚠️ 需充电后真机校准。 */
+export const BACKSPACE_COORD = { x: 238, y: 91 };
+
 /** Cancel/Back button coordinate */
 export const CANCEL_COORD = { x: 19, y: 87 };
 
@@ -140,24 +157,44 @@ export const STEP_DELAY_AFTER_LAST_CONFIRM_MS = 5000;
  * Generates AutoStep array from a list of words.
  * Each word becomes: letter steps + confirm step.
  */
+/** 构造某个词的逐字母点击坐标序列（跳过键盘表里没有的字符）。 */
+function wordKeyCoords(word: string): { x: number; y: number }[] {
+  const keys: { x: number; y: number }[] = [];
+  for (const letter of word.toLowerCase()) {
+    const coord = LETTER_COORDS[letter];
+    if (coord) keys.push({ x: coord.x, y: coord.y });
+  }
+  return keys;
+}
+
 export function generateWordSteps(words: string[]): AutoStep[] {
   const steps: AutoStep[] = [];
   words.forEach((word, wordIndex) => {
     const isLastWord = wordIndex === words.length - 1;
-    const lowerWord = word.toLowerCase();
-    for (let i = 0; i < lowerWord.length; i++) {
-      const letter = lowerWord[i];
-      const coord = LETTER_COORDS[letter];
-      if (coord) {
-        steps.push({
-          label: `W${wordIndex + 1}:${letter}`,
-          x: coord.x,
-          y: coord.y,
-          depth: 12,
-          delayAfter: STEP_DELAY_AFTER_LETTER_MS,
-        });
-      }
-    }
+    const keys = wordKeyCoords(word);
+    keys.forEach((coord, i) => {
+      steps.push({
+        label: `W${wordIndex + 1}:${word.toLowerCase()[i] ?? ''}`,
+        x: coord.x,
+        y: coord.y,
+        depth: 12,
+        delayAfter: STEP_DELAY_AFTER_LETTER_MS,
+      });
+    });
+    // 逐词校验：确认前 OCR 输入框比对期望词，不符则自动退格重打
+    steps.push({
+      label: `W${wordIndex + 1}:verify`,
+      x: DEVICE_HOME_COORD.x,
+      y: DEVICE_HOME_COORD.y,
+      depth: 12,
+      moveOnly: true,
+      verifyWord: {
+        word: word.toLowerCase(),
+        wordIndex: wordIndex + 1,
+        keys,
+        backspace: BACKSPACE_COORD,
+      },
+    });
     steps.push({
       label: `W${wordIndex + 1}:confirm`,
       x: CONFIRM_COORD.x,
@@ -191,20 +228,31 @@ export function generateSlip39ShareSteps(shares: string[][]): AutoStep[] {
       globalWordIndex += 1;
       const isLastWord = isLastShare(shareIndex) && isLastWordInShare(wordInShareIndex, shareWords);
       const lowerWord = word.toLowerCase();
-      for (let i = 0; i < lowerWord.length; i++) {
-        const letter = lowerWord[i];
-        const coord = LETTER_COORDS[letter];
-        if (coord) {
-          steps.push({
-            label: `W${globalWordIndex}:${letter}`,
-            x: coord.x,
-            y: coord.y,
-            depth: 12,
-            delayBefore: shareIndex > 0 && wordInShareIndex === 0 && i === 0 ? 3000 : undefined,
-            delayAfter: STEP_DELAY_AFTER_LETTER_MS,
-          });
-        }
-      }
+      const keys = wordKeyCoords(lowerWord);
+      keys.forEach((coord, i) => {
+        steps.push({
+          label: `W${globalWordIndex}:${lowerWord[i] ?? ''}`,
+          x: coord.x,
+          y: coord.y,
+          depth: 12,
+          delayBefore: shareIndex > 0 && wordInShareIndex === 0 && i === 0 ? 3000 : undefined,
+          delayAfter: STEP_DELAY_AFTER_LETTER_MS,
+        });
+      });
+      // 逐词校验（分片内序号 = wordInShareIndex+1，报错更贴近设备显示的"分片N·单词M"）
+      steps.push({
+        label: `W${globalWordIndex}:verify`,
+        x: DEVICE_HOME_COORD.x,
+        y: DEVICE_HOME_COORD.y,
+        depth: 12,
+        moveOnly: true,
+        verifyWord: {
+          word: lowerWord,
+          wordIndex: wordInShareIndex + 1,
+          keys,
+          backspace: BACKSPACE_COORD,
+        },
+      });
       steps.push({
         label: `W${globalWordIndex}:confirm`,
         x: CONFIRM_COORD.x,
