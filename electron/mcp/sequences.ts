@@ -54,6 +54,17 @@ export interface AutoStep {
      */
     loop?: boolean;
   };
+  /**
+   * Import per-word check: before confirming a typed word, OCR the input field
+   * and compare against the expected word; on mismatch, backspace-clear and
+   * retype, then re-check, finally throwing with the offending word index.
+   */
+  verifyWord?: {
+    word: string;
+    wordIndex: number;
+    keys: { x: number; y: number }[];
+    backspace: { x: number; y: number };
+  };
 }
 
 /**

@@ -1,10 +1,12 @@
-export type PreferredDeviceTestSetId = 'pro' | 'pro2';
+export type PreferredDeviceTestSetId = 'pro' | 'pro2' | 'neo';
 
 export const DEFAULT_PREFERRED_DEVICE_TEST_SET_ID: PreferredDeviceTestSetId = 'pro';
 export const SELECTED_DEVICE_TEST_SET_STORAGE_KEY = 'phonepilot:selected-device-test-set';
 
 export function normalizePreferredDeviceTestSet(value: string | null): PreferredDeviceTestSetId {
-  return value === 'pro2' ? 'pro2' : DEFAULT_PREFERRED_DEVICE_TEST_SET_ID;
+  if (value === 'pro2') return 'pro2';
+  if (value === 'neo') return 'neo';
+  return DEFAULT_PREFERRED_DEVICE_TEST_SET_ID;
 }
 
 export function getStoredDeviceTestSet(): PreferredDeviceTestSetId {

@@ -173,7 +173,9 @@ function getDeviceRecVariantCount(
   layoutHint?: 'mnemonic' | 'verify-options' | 'verify-number' | 'generic',
   deviceTestSetId?: PreferredDeviceTestSetId | string | null
 ): number | undefined {
-  return normalizePreferredDeviceTestSet(deviceTestSetId ?? getStoredDeviceTestSet()) === 'pro2'
+  // Neo 与 Pro2 屏幕/OCR 一致，rec variant 行为相同
+  const device = normalizePreferredDeviceTestSet(deviceTestSetId ?? getStoredDeviceTestSet());
+  return (device === 'pro2' || device === 'neo')
     && (layoutHint === 'mnemonic' || layoutHint === 'verify-options')
     ? 4
     : undefined;
@@ -3181,6 +3183,40 @@ function CameraPanel() {
     window.addEventListener('qa-auto-hw:trigger-verify-ocr', handleTriggerVerifyOcr);
     return () => window.removeEventListener('qa-auto-hw:trigger-verify-ocr', handleTriggerVerifyOcr);
   }, [runNumberOcr, runVerifyOptionsOcr, storedMnemonic]);
+
+  // 导入逐词校验：OCR 键盘输入框里当前显示的大字单词，返回识别到的最长字母串
+  useEffect(() => {
+    const handleTriggerFieldOcr = async (event: Event) => {
+      const detail = (event as CustomEvent).detail as
+        | { sceneConfig?: OcrSceneConfig }
+        | undefined;
+      let recognized = '';
+      try {
+        const scene = detail?.sceneConfig
+          ?? withOcrSceneDefaults(DEVICE_OCR_SCENES.pro2.importField?.word, {
+            roi: { x: 230, y: 745, width: 620, height: 175 },
+            scale: 5,
+            useNearestNeighbor: true,
+          });
+        if (scene) {
+          const result = await runOcrOnRegion(scene, { layoutHint: 'generic' });
+          if (result?.rawText) {
+            const tokens = (result.rawText.match(/[a-zA-Z]{1,16}/g) ?? [])
+              .map((t) => t.toLowerCase());
+            // 输入框只有一个词，取最长的字母串作为识别结果
+            recognized = tokens.reduce((best, cur) => (cur.length > best.length ? cur : best), '');
+          }
+        }
+      } catch (err) {
+        console.warn('[CameraPanel] field OCR failed:', err);
+      }
+      window.dispatchEvent(
+        new CustomEvent('qa-auto-hw:field-ocr-result', { detail: { text: recognized } })
+      );
+    };
+    window.addEventListener('qa-auto-hw:trigger-field-ocr', handleTriggerFieldOcr);
+    return () => window.removeEventListener('qa-auto-hw:trigger-field-ocr', handleTriggerFieldOcr);
+  }, [runOcrOnRegion]);
 
   // Handle device selection change
   const handleDeviceChange = (event: React.ChangeEvent<HTMLSelectElement>) => {

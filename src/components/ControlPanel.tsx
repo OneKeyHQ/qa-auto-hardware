@@ -25,6 +25,7 @@ import {
   getFullSteps,
   getSequence,
   getSequencesByCategory,
+  normalizeDeviceTestSetId,
   type DeviceTestSetId,
 } from '../../electron/mcp/sequenceSets';
 import { DEVICE_OCR_SCENES } from '../ocr/deviceScenes';
@@ -781,7 +782,94 @@ function ControlPanel() {
             await delay(step.delayBefore ?? 0);
           }
 
-          if (step.moveOnly) {
+          if (step.verifyWord) {
+            const vw = step.verifyWord;
+            const VIEW_X = 259, VIEW_Y = 0; // 相机取景位（臂让开屏幕）
+            const clickZ = ARM_CONTROLLER_CONFIG.zUp;
+
+            const tapKey = async (x: number, y: number) => {
+              await send(`X${x}Y${y}`);
+              await send(`Z${step.depth}`);
+              await delay(ARM_CONTROLLER_CONFIG.clickDelay);
+              await send(`Z${clickZ}`);
+            };
+            const readField = async (): Promise<string> => {
+              await send(`X${VIEW_X}Y${VIEW_Y}`);
+              await delay(1200); // 等臂让开 + 相机稳定
+              return await new Promise<string>((resolve) => {
+                let settled = false;
+                const handler = (e: Event) => {
+                  if (settled) return;
+                  settled = true;
+                  window.removeEventListener('qa-auto-hw:field-ocr-result', handler);
+                  resolve(String((e as CustomEvent).detail?.text ?? '').toLowerCase());
+                };
+                window.addEventListener('qa-auto-hw:field-ocr-result', handler);
+                window.dispatchEvent(new CustomEvent('qa-auto-hw:trigger-field-ocr', { detail: {} }));
+                setTimeout(() => {
+                  if (settled) return;
+                  settled = true;
+                  window.removeEventListener('qa-auto-hw:field-ocr-result', handler);
+                  resolve('');
+                }, 8000);
+              });
+            };
+            // 归一化后：完全相等，或长度相同且仅差 1 个字符，视为匹配（容忍 OCR 单字符噪声）
+            const looksMatch = (a: string, b: string): boolean => {
+              const na = a.replace(/[^a-z]/g, ''), nb = b.replace(/[^a-z]/g, '');
+              if (na === nb) return true;
+              if (!na || na.length !== nb.length) return false;
+              let diff = 0;
+              for (let i = 0; i < na.length; i++) if (na[i] !== nb[i]) diff++;
+              return diff <= 1;
+            };
+
+            // 读输入框，OCR 读到空时重读(不重打)——避免把 OCR 抖动误判为输错、
+            // 从而对本来正确的词做退格重打（退格坐标若不准会破坏正确输入）。
+            const readFieldWithRetry = async (): Promise<string> => {
+              for (let r = 0; r < 3; r++) {
+                const t = await readField();
+                if (t) return t;
+                await delay(600);
+              }
+              return '';
+            };
+
+            const expected = vw.word;
+            let recognized = await readFieldWithRetry();
+            addLog('校验', `第 ${vw.wordIndex} 词: 期望 "${expected}" / 识别 "${recognized || '(空)'}"`);
+
+            // 只有"读到了非空但和期望不符"才退格重打；读不到不重打。
+            for (
+              let attempt = 1;
+              attempt <= 2 && recognized !== '' && !looksMatch(recognized, expected);
+              attempt++
+            ) {
+              addLog('校验', `第 ${vw.wordIndex} 词不符(识别"${recognized}")，退格重打(${attempt}/2)...`);
+              for (let k = 0; k < expected.length + 3; k++) {
+                await tapKey(vw.backspace.x, vw.backspace.y);
+                await delay(120);
+              }
+              for (const key of vw.keys) {
+                await tapKey(key.x, key.y);
+                await delay(400);
+              }
+              recognized = await readFieldWithRetry();
+              addLog('校验', `第 ${vw.wordIndex} 词重打后: 识别 "${recognized || '(空)'}"`);
+            }
+
+            if (recognized === '') {
+              throw new Error(
+                `第 ${vw.wordIndex} 词校验失败：OCR 无法识别输入框内容（检查取景/输入框ROI，未擅自重打以免破坏正确输入）`
+              );
+            }
+            if (!looksMatch(recognized, expected)) {
+              throw new Error(
+                `第 ${vw.wordIndex} 词输入校验失败：期望 "${expected}"，实际识别 "${recognized}"（多为机械臂/设备位置偏移，请检查设备是否摆正）`
+              );
+            }
+            addLog('校验', `第 ${vw.wordIndex} 词校验通过`);
+          } else if (step.moveOnly) {
             await send(`X${step.x}Y${step.y}`);
             addLog('自动', `${step.label} - 移动到 (${step.x},${step.y})`);
           } else if (step.ocrVerify) {
@@ -1151,7 +1239,7 @@ function ControlPanel() {
     }
 
     return window.electronAPI.onMcpExecuteSequenceRequest(async (payload) => {
-      const requestedDeviceTestSet = payload.deviceTestSetId === 'pro2' ? 'pro2' : DEFAULT_DEVICE_TEST_SET_ID;
+      const requestedDeviceTestSet = normalizeDeviceTestSetId(payload.deviceTestSetId);
       if (state.isAutoRunning) {
         window.electronAPI?.sendMcpExecuteSequenceResponse?.({
           success: false,
@@ -1286,7 +1374,7 @@ function ControlPanel() {
             className="btn btn-secondary btn-connect"
             onClick={handleResetPosition}
             disabled={isControlDisabled}
-            title={`复位到 ${state.selectedDeviceTestSet === 'pro2' ? 'Pro2' : 'Pro'} home`}
+            title={`复位到 ${selectedDeviceTestSetName} home`}
           >
             复位
           </button>
@@ -1467,7 +1555,7 @@ function ControlPanel() {
               <select
                 value={state.selectedDeviceTestSet}
                 onChange={(e) => {
-                  const nextDevice = e.target.value === 'pro2' ? 'pro2' : DEFAULT_DEVICE_TEST_SET_ID;
+                  const nextDevice = normalizeDeviceTestSetId(e.target.value);
                   const nextCategories = getAllCategories(nextDevice);
                   const nextCategory = nextCategories[0] ?? '';
                   const nextSequence = getSequencesByCategory(nextCategory, nextDevice)[0];
@@ -1521,8 +1609,8 @@ function ControlPanel() {
                   disabled={(!isRunning && isControlDisabled) || (state.isAutoRunning && !isRunning)}
                   title={`${selectedDeviceTestSetName}: ${seq.id}`}
                 >
-                  {state.selectedDeviceTestSet === 'pro2' && (
-                    <span className="seq-btn-device">Pro2</span>
+                  {state.selectedDeviceTestSet !== DEFAULT_DEVICE_TEST_SET_ID && (
+                    <span className="seq-btn-device">{selectedDeviceTestSetName}</span>
                   )}
                   <span className="seq-btn-name">{seq.name}</span>
                   {isRunning && (
