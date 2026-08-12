@@ -93,7 +93,7 @@ interface ResolvedSequenceStepPayload {
       scale?: number;
       useNearestNeighbor?: boolean;
     };
-    deviceTestSetId?: 'pro' | 'pro2';
+    deviceTestSetId?: 'pro' | 'pro2' | 'neo';
   };
   ocrVerify?: {
     options: { x: number; y: number; depth: number }[];
