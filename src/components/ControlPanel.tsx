@@ -814,14 +814,31 @@ function ControlPanel() {
                 }, 8000);
               });
             };
-            // 归一化后：完全相等，或长度相同且仅差 1 个字符，视为匹配（容忍 OCR 单字符噪声）
+            // 归一化后编辑距离 ≤ 1（替换/插入/删除各容忍 1 处）视为匹配。
+            // 覆盖 OCR 单字符噪声，以及输入框末尾"文字光标 |"被 OCR 误读成字母
+            // （如 "network" 读成 "networkl"）导致长度多 1 的情况。
+            // BIP39/SLIP39 词表任意两词编辑距离 ≥ 2，放宽到 1 不会把两个有效词混淆。
             const looksMatch = (a: string, b: string): boolean => {
               const na = a.replace(/[^a-z]/g, ''), nb = b.replace(/[^a-z]/g, '');
               if (na === nb) return true;
-              if (!na || na.length !== nb.length) return false;
-              let diff = 0;
-              for (let i = 0; i < na.length; i++) if (na[i] !== nb[i]) diff++;
-              return diff <= 1;
+              if (!na || !nb) return false;
+              const dl = Math.abs(na.length - nb.length);
+              if (dl > 1) return false;
+              if (dl === 0) {
+                // 等长：容忍 1 处替换
+                let diff = 0;
+                for (let i = 0; i < na.length; i++) if (na[i] !== nb[i]) diff++;
+                return diff <= 1;
+              }
+              // 长度差 1：短串是长串去掉 1 个字符（1 次插入/删除）
+              const short = na.length < nb.length ? na : nb;
+              const long = na.length < nb.length ? nb : na;
+              let i = 0, j = 0, skips = 0;
+              while (i < short.length && j < long.length) {
+                if (short[i] === long[j]) { i++; j++; }
+                else { skips++; j++; if (skips > 1) return false; }
+              }
+              return true;
             };
 
             // 读输入框，OCR 读到空时重读(不重打)——避免把 OCR 抖动误判为输错、
