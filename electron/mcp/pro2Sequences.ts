@@ -1241,7 +1241,7 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
       },
       { label: '点击重置', x: 205, y: 93, depth: 12, delayAfter: 800 },
       { label: '二次确认重置', x: 223, y: 70, depth: 12, delayAfter: 1000 },
-      { label: '勾选点击1', x: 196, y: 54, depth: 12, delayAfter: 600 },
+      { label: '勾选点击1', x: 197, y: 54, depth: 12, delayAfter: 600 },
       { label: '勾选点击2', x: 196, y: 64, depth: 12, delayAfter: 800 },
       {
         label: '滑动确认重置',

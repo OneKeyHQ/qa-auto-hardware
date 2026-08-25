@@ -42,10 +42,10 @@ export const executeSequenceSchema = z.object({
     .string()
     .describe(`The ID of the sequence to execute. Available for each device set: ${getAllSequenceIds().join(', ')}`),
   deviceTestSetId: z
-    .enum(['pro', 'pro2'])
+    .enum(['pro', 'pro2', 'neo'])
     .optional()
     .default(DEFAULT_DEVICE_TEST_SET_ID)
-    .describe('Device test set to execute. Pro2 has a separate sequence definition file.'),
+    .describe('Device test set to execute. Pro2 and Neo have separate sequence definitions (Neo omits the fingerprint step).'),
   returnFrame: z
     .boolean()
     .optional()
