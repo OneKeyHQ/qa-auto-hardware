@@ -359,16 +359,20 @@ const ALL_PAGE_ACTIONS: PageAction[] = [
     ],
   },
   {
+    // 真机实测 2026-09-03 校准：Hello→选语言之后有「开始设置(手动设置)」与
+    // 「为 OneKey 命名」两页（Pro2/Neo 都有）。此前只有 6 步（选完语言直接进 PIN），
+    // 缺这两步会让 PIN 之后的所有点击整体错位，导入时表现为「点到创建/走进 SeedCard」。
+    // - 简体在 (210,69)；(212,66) 会选到繁体。
+    // - Hello 后等待 300ms 太短、与语言坐标近乎重叠易被当成双击，加长到 1500ms。
     id: 'lang-zh',
-    name: '选择中文',
+    name: '选择中文+手动设置',
     group: '初始设置',
     steps: [
-      { label: '点击Hello', x: 215, y: 65, depth: 12, delayAfter: 300 },
-      { label: '引导选择语言1', x: 212, y: 66, depth: 12, delayAfter: 300 },
-      { label: '引导选择语言2', x: 207, y: 73, depth: 12, delayAfter: 8000 },
-      { label: '引导选择语言3', x: 213, y: 80, depth: 12, delayAfter: 300 },
-      { label: '引导继续1', x: 202, y: 94, depth: 12, delayAfter: 300 },
-      { label: '引导继续2', x: 202, y: 94, depth: 12, delayAfter: 300 },
+      { label: '点击Hello', x: 215, y: 65, depth: 12, delayAfter: 1500 },
+      { label: '选择简体中文', x: 210, y: 69, depth: 12, delayBefore: 400, delayAfter: 6000 },
+      { label: '开始设置-手动设置', x: 210, y: 80, depth: 12, delayAfter: 2500 },
+      { label: '命名页-暂不', x: 203, y: 93, depth: 12, delayAfter: 900 },
+      { label: 'PIN介绍-继续', x: 210, y: 93, depth: 12, delayAfter: 900 },
     ],
   },
   {
