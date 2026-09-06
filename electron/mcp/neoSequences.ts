@@ -19,34 +19,15 @@ export {
 } from './pro2Sequences';
 
 /**
- * Neo 与 Pro2 差异极小：除以下三点外，所有坐标/事件与 Pro2 完全一致，
- * 因此只覆盖 3 个动作，其余全部沿用 Pro2。
+ * Neo 与 Pro2 差异极小：除以下两点外，所有坐标/事件与 Pro2 完全一致，
+ * 因此只覆盖 2 个动作，其余（含 lang-zh 的手动设置/命名/简体坐标/Hello 等待）
+ * 全部沿用 Pro2。
  *   ① 无指纹：`nav-continue-setup` 比 Pro2 少 1 步（去掉跳过指纹的其中一步）。
  *   ② 设置入口是磁贴网格：`reset-wallet-nav-action` 只把「设置」坐标改成 (199,63)，
  *      其余重置步骤全部同 Pro2。
- *   ③ Hello→选语言的间隔：Pro2 的 300ms 在 Neo 上太短，Hello 与语言坐标几乎重叠、
- *      易被当成"双击"而选错语言 —— `lang-zh` 只把「点击Hello」后的等待改成 1500ms，
- *      坐标不变。
+ * 注：lang-zh 的「手动设置/命名」两页、简体 (210,69)、Hello 后 1500ms 等待，
+ * Pro2 与 Neo 一致，已并入 Pro2 的 lang-zh，Neo 不再单独覆盖。
  */
-
-/**
- * Neo lang-zh：坐标完全同 Pro2，仅把「点击Hello」后的等待 300ms→1500ms，
- * 给语言页留足加载时间，避免 Hello 与语言两个近距坐标被当成双击而选错语言。
- */
-const NEO_LANG_ZH: pro2.PageAction = {
-  id: 'lang-zh',
-  name: '选择中文(Neo:仅加长Hello等待)',
-  group: '初始设置',
-  steps: [
-    { label: '点击Hello', x: 215, y: 65, depth: 12, delayAfter: 1500 },
-    // Neo 差异：简体在 (210,69)；pro2 的 (212,66) 在 Neo 上会选到繁体（真机 A/B 实测）
-    { label: '引导选择简体', x: 210, y: 69, depth: 12, delayAfter: 300 },
-    { label: '引导选择语言2', x: 207, y: 73, depth: 12, delayAfter: 8000 },
-    { label: '引导选择语言3', x: 213, y: 80, depth: 12, delayAfter: 300 },
-    { label: '引导继续1', x: 202, y: 94, depth: 12, delayAfter: 300 },
-    { label: '引导继续2', x: 202, y: 94, depth: 12, delayAfter: 300 },
-  ],
-};
 
 /**
  * Neo nav-continue-setup：坐标同 Pro2 (212,94)，仅比 Pro2 少 1 步
@@ -116,7 +97,6 @@ const NEO_RESET_WALLET_NAV_ACTION: pro2.PageAction = {
 
 /** Neo 覆盖的动作表：id -> Neo 版动作（仅这三项与 Pro2 不同，其余全部沿用 Pro2） */
 const NEO_OVERRIDES: Record<string, pro2.PageAction> = {
-  'lang-zh': NEO_LANG_ZH,
   'nav-continue-setup': NEO_NAV_CONTINUE_SETUP,
   'reset-wallet-nav-action': NEO_RESET_WALLET_NAV_ACTION,
 };
